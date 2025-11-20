@@ -34,7 +34,11 @@ export class AudioTrackSelection extends shaka.ui.SettingsMenu {
     /** @private */
     this._events = events
 
-    console.warn('[AudioTrackSelection] Initialized with available languages:', availableAudioLanguages)
+    console.warn('[Audio-Debug-Init] AudioTrackSelection initialized:', {
+      videoId,
+      availableLanguagesCount: availableAudioLanguages?.length || 0,
+      availableLanguages: availableAudioLanguages
+    })
 
     /** @type {SVGElement} */
     const checkmarkIcon = new shaka.ui.MaterialSVGIcon(null, PlayerIcons.DONE_FILLED).getSvgElement()
@@ -88,18 +92,33 @@ export class AudioTrackSelection extends shaka.ui.SettingsMenu {
     // Get currently loaded tracks from Shaka Player
     const loadedTracks = Array.from(deduplicateAudioTracks(this.player.getAudioTracks()).values())
 
-    console.warn('[AudioTrackSelection] Loaded tracks from player:', loadedTracks.map(t => ({
+    console.warn('[Audio-Debug-Tracks] Loaded tracks from player:', loadedTracks.map(t => ({
       language: t.language,
       label: t.label,
       active: t.active
     })))
+
+    // Log all tracks available in the store
+    const storeAudioTracks = store.getters.getAudioTracks || []
+    console.warn('[Audio-Debug-Tracks] Audio tracks in Vuex store:', {
+      count: storeAudioTracks.length,
+      tracks: storeAudioTracks.map(t => ({
+        id: t.id,
+        languageCode: t.languageCode,
+        hasUrl: !!t.url,
+        source: t.source,
+        bitrate: t.bitrate
+      }))
+    })
 
     // If we have available languages from metadata, use those; otherwise fall back to loaded tracks
     const languagesToDisplay = this._availableAudioLanguages && this._availableAudioLanguages.length > 0
       ? this._availableAudioLanguages
       : loadedTracks.map(t => t.language)
 
-    console.warn('[AudioTrackSelection] Languages to display:', languagesToDisplay)
+    console.warn('[Audio-Debug-Languages] Languages to display:', languagesToDisplay)
+    console.warn('[Audio-Debug-Languages] Source:', this._availableAudioLanguages && this._availableAudioLanguages.length > 0 ? 'availableAudioLanguages prop (metadata)' : 'loaded tracks from player')
+    console.warn('[Audio-Debug-Languages] Count:', languagesToDisplay.length)
 
     const menu = this.menu
     const backButton = menu.querySelector('.shaka-back-to-overflow-button')
@@ -122,7 +141,15 @@ export class AudioTrackSelection extends shaka.ui.SettingsMenu {
       return a.localeCompare(b)
     })
 
+    console.warn('[Audio-Debug-Filter] Checking for unexpected filtering:', {
+      languagesToDisplayCount: languagesToDisplay.length,
+      sortedLanguagesCount: sortedLanguages.length,
+      filtering: languagesToDisplay.length !== sortedLanguages.length ? 'YES - FOUND FILTER!' : 'NO'
+    })
+
     let count = 0
+
+    console.warn('[Audio-Debug-Mapping] Starting menu item creation for', sortedLanguages.length, 'languages')
 
     // Create menu items for each language
     for (const language of sortedLanguages) {
@@ -131,16 +158,31 @@ export class AudioTrackSelection extends shaka.ui.SettingsMenu {
       const isActive = loadedTrack?.active || false
       const trackMetadata = this.getTrackMetadataForLanguage_(language)
 
+      console.warn(`[Audio-Debug-Mapping] Language: ${language}`, {
+        hasLoadedTrack: !!loadedTrack,
+        loadedTrackLabel: loadedTrack?.label || null,
+        isActive: isActive,
+        hasMetadata: !!trackMetadata,
+        metadataHasUrl: !!trackMetadata?.url,
+        metadataSource: trackMetadata?.source || null
+      })
+
       const button = document.createElement('button')
       button.addEventListener('click', () => {
+        console.warn(`[Audio-Debug-Click] User clicked language: ${language}`, {
+          hasLoadedTrack: !!loadedTrack,
+          hasMetadata: !!trackMetadata,
+          metadataHasUrl: !!trackMetadata?.url
+        })
+
         if (loadedTrack) {
           // Language is already loaded, just switch to it
           this.onAudioTrackSelected_(loadedTrack, trackMetadata)
         } else if (trackMetadata) {
-          console.warn(`[AudioTrackSelection] User selected unloaded language: ${language}`)
+          console.warn(`[Audio-Debug-Click] User selected unloaded language: ${language}, requesting dynamic audio track`)
           this.requestDynamicAudioTrack_(trackMetadata)
         } else {
-          console.warn(`[AudioTrackSelection] No metadata is available for language ${language}, cannot switch audio track.`)
+          console.warn(`[Audio-Debug-Click] No metadata is available for language ${language}, cannot switch audio track.`)
         }
       })
 
@@ -149,7 +191,18 @@ export class AudioTrackSelection extends shaka.ui.SettingsMenu {
 
       // Get full language name
       const languageName = loadedTrack?.label || getLanguageName(language)
-      span.textContent = languageName
+
+      // Add visual indicator for track availability
+      let displayName = languageName
+      if (!loadedTrack) {
+        if (trackMetadata && trackMetadata.url) {
+          displayName = `${languageName} [will load]`
+        } else {
+          displayName = `${languageName} [unavailable]`
+        }
+      }
+
+      span.textContent = displayName
 
       // Mark active track
       if (isActive) {
@@ -172,6 +225,41 @@ export class AudioTrackSelection extends shaka.ui.SettingsMenu {
       count++
     }
 
+    console.warn('[Audio-Debug-Render] Menu rendering complete:', {
+      totalLanguagesProcessed: sortedLanguages.length,
+      menuItemsCreated: count,
+      menuItemsInDOM: menu.querySelectorAll('button:not(.shaka-back-to-overflow-button)').length
+    })
+
+    // Summary analysis
+    const languagesWithLoadedTrack = sortedLanguages.filter(lang => loadedTracks.find(t => t.language === lang))
+    const languagesWithMetadata = sortedLanguages.filter(lang => this.getTrackMetadataForLanguage_(lang))
+    const languagesWithUrl = sortedLanguages.filter(lang => {
+      const metadata = store.getters.getAudioTracks?.find(t => (t.languageCode || '').toLowerCase() === lang.toLowerCase())
+      return metadata && metadata.url
+    })
+
+    console.warn('[Audio-Debug-Summary] ========================================')
+    console.warn('[Audio-Debug-Summary] AUDIO TRACK DISCREPANCY ANALYSIS')
+    console.warn('[Audio-Debug-Summary] ========================================')
+    console.warn('[Audio-Debug-Summary] Languages from metadata (availableAudioLanguages):', this._availableAudioLanguages.length)
+    console.warn('[Audio-Debug-Summary] Languages list:', this._availableAudioLanguages)
+    console.warn('[Audio-Debug-Summary] Tracks loaded in Shaka player:', loadedTracks.length)
+    console.warn('[Audio-Debug-Summary] Tracks in Vuex store:', storeAudioTracks.length)
+    console.warn('[Audio-Debug-Summary] Languages with loaded track:', languagesWithLoadedTrack.length, languagesWithLoadedTrack)
+    console.warn('[Audio-Debug-Summary] Languages with metadata:', languagesWithMetadata.length, languagesWithMetadata)
+    console.warn('[Audio-Debug-Summary] Languages with URL:', languagesWithUrl.length, languagesWithUrl)
+    console.warn('[Audio-Debug-Summary] Languages WITHOUT loaded track:',
+      sortedLanguages.filter(lang => !loadedTracks.find(t => t.language === lang)))
+    console.warn('[Audio-Debug-Summary] Languages WITHOUT metadata:',
+      sortedLanguages.filter(lang => !this.getTrackMetadataForLanguage_(lang)))
+    console.warn('[Audio-Debug-Summary] Languages WITHOUT URL:',
+      sortedLanguages.filter(lang => {
+        const metadata = store.getters.getAudioTracks?.find(t => (t.languageCode || '').toLowerCase() === lang.toLowerCase())
+        return !metadata || !metadata.url
+      }))
+    console.warn('[Audio-Debug-Summary] ========================================')
+
     menu.querySelector('.shaka-chosen-item')?.parentElement.focus()
 
     this.button.setAttribute('shaka-status', this.currentSelection.innerText)
@@ -179,10 +267,10 @@ export class AudioTrackSelection extends shaka.ui.SettingsMenu {
     // Show button when multiple tracks are available
     if (count > 1) {
       this.button.classList.remove('shaka-hidden')
-      console.warn(`[AudioTrackSelection] Showing audio track button (${count} languages available)`)
+      console.warn(`[Audio-Debug-UI] Showing audio track button (${count} languages available)`)
     } else {
       this.button.classList.add('shaka-hidden')
-      console.warn('[AudioTrackSelection] Hiding audio track button (only 1 language)')
+      console.warn('[Audio-Debug-UI] Hiding audio track button (only 1 language)')
     }
   }
 
@@ -199,7 +287,24 @@ export class AudioTrackSelection extends shaka.ui.SettingsMenu {
     const tracks = store.getters.getAudioTracks || []
     const normalizedLanguage = language.toLowerCase()
 
-    return tracks.find(track => (track.languageCode || '').toLowerCase() === normalizedLanguage) || null
+    const result = tracks.find(track => (track.languageCode || '').toLowerCase() === normalizedLanguage) || null
+
+    console.warn(`[Audio-Debug-Tracks] getTrackMetadataForLanguage_('${language}'):`, {
+      normalizedLanguage,
+      totalTracksInStore: tracks.length,
+      foundMatch: !!result,
+      matchDetails: result
+        ? {
+            id: result.id,
+            languageCode: result.languageCode,
+            hasUrl: !!result.url,
+            source: result.source,
+            bitrate: result.bitrate
+          }
+        : null
+    })
+
+    return result
   }
 
   /**
