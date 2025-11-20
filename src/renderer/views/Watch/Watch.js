@@ -316,6 +316,9 @@ export default defineComponent({
       this.videoCurrentChapterIndex = 0
       this.videoGenreIsMusic = false
 
+      // Clear audio tracks for new video
+      this.$store.dispatch('clearAudioTracks')
+
       this.checkIfTimestamp()
       this.checkIfPlaylist()
 
@@ -837,6 +840,18 @@ export default defineComponent({
             }
             this.videoStoryboardSrc = this.createLocalStoryboardUrls(source.at(-1))
           }
+        }
+
+        // Fetch audio tracks metadata from all sources (MWEB, WEB, DASH)
+        if (result.audioMetadata) {
+          console.warn('[Audio-Metadata-Fetch] Calling fetchAudioTracks action for video:', this.videoId)
+          await this.$store.dispatch('fetchAudioTracks', {
+            videoId: this.videoId,
+            audioMetadata: result.audioMetadata,
+            systemLanguage: this.currentLocale
+          })
+        } else {
+          console.warn('[Audio-Metadata-Fetch] No audioMetadata available in result')
         }
 
         this.isLoading = false

@@ -431,6 +431,101 @@ export async function getLocalSearchContinuation(continuationData) {
 }
 
 /**
+ * Get language name from language code using Intl.DisplayNames
+ * @param {string} languageCode - Language code (e.g., 'en', 'pl', 'es')
+ * @param {string} displayLanguage - Language to display name in (default: 'en')
+ * @returns {string} - Full language name
+ */
+function getLanguageNameForMetadata(languageCode, displayLanguage = 'en') {
+  if (!languageCode || languageCode === 'und') {
+    return 'Unknown'
+  }
+
+  try {
+    const displayNames = new Intl.DisplayNames([displayLanguage], {
+      type: 'language',
+      languageDisplay: 'standard'
+    })
+    return displayNames.of(languageCode) || languageCode
+  } catch (error) {
+    console.warn(`[Audio-Metadata-Fetch] Failed to get language name for ${languageCode}:`, error)
+    return languageCode
+  }
+}
+
+/**
+ * Collect audio metadata from all sources (MWEB, WEB, DASH)
+ * @param {Array} webFormats - Audio formats from WEB client
+ * @param {Array} mwebFormats - Audio formats from MWEB client
+ * @param {Array} dashFormats - Audio formats from DASH
+ * @returns {object} - Object containing arrays for mweb, web, and dash tracks
+ */
+function collectAudioMetadata(webFormats, mwebFormats, dashFormats) {
+  console.warn('[Audio-Metadata-Fetch] Starting metadata collection from all sources')
+
+  const metadata = {
+    mweb: [],
+    web: [],
+    dash: []
+  }
+
+  // Helper function to convert format to track structure
+  const formatToTrack = (format, source) => {
+    const languageCode = format.language || 'und'
+    const languageName = getLanguageNameForMetadata(languageCode)
+    const label = format.audio_track?.display_name?.text || languageName
+    const isOriginal = !!(format.is_original || format.audio_track?.audio_is_default)
+    const formatId = format.itag || null
+    const url = format.freeTubeUrl || format.url || null
+    const bitrate = format.bitrate ? `${Math.round(format.bitrate / 1000)}kbps` : null
+
+    return {
+      id: `${languageCode}_${formatId}`,
+      languageCode,
+      languageName,
+      label,
+      isOriginal,
+      source,
+      url,
+      formatId,
+      bitrate
+    }
+  }
+
+  // Process MWEB formats
+  if (mwebFormats && Array.isArray(mwebFormats)) {
+    console.warn(`[Audio-Metadata-Fetch] Processing ${mwebFormats.length} MWEB audio formats`)
+    mwebFormats.forEach(format => {
+      metadata.mweb.push(formatToTrack(format, 'MWEB'))
+    })
+  }
+
+  // Process WEB formats
+  if (webFormats && Array.isArray(webFormats)) {
+    console.warn(`[Audio-Metadata-Fetch] Processing ${webFormats.length} WEB audio formats`)
+    webFormats.forEach(format => {
+      metadata.web.push(formatToTrack(format, 'WEB'))
+    })
+  }
+
+  // Process DASH formats
+  if (dashFormats && Array.isArray(dashFormats)) {
+    console.warn(`[Audio-Metadata-Fetch] Processing ${dashFormats.length} DASH audio formats`)
+    dashFormats.forEach(format => {
+      metadata.dash.push(formatToTrack(format, 'DASH'))
+    })
+  }
+
+  console.warn('[Audio-Metadata-Fetch] Metadata collection complete:', {
+    mweb: metadata.mweb.length,
+    web: metadata.web.length,
+    dash: metadata.dash.length
+  })
+
+  return metadata
+}
+
+/**
  * @param {string} id
  */
 export async function getLocalVideoInfo(id) {
@@ -680,6 +775,15 @@ export async function getLocalVideoInfo(id) {
       captionTrack.base_url = url.toString()
     }
   }
+
+  // Collect audio metadata from all sources for Vuex store
+  console.warn('[Audio-Metadata-Fetch] Collecting audio metadata from MWEB, WEB, and DASH sources')
+  info.audioMetadata = collectAudioMetadata(webAudioFormats, mwebAudioFormats, dashAudioFormats)
+  console.warn('[Audio-Metadata-Fetch] Audio metadata collection complete:', {
+    mwebCount: info.audioMetadata.mweb.length,
+    webCount: info.audioMetadata.web.length,
+    dashCount: info.audioMetadata.dash.length
+  })
 
   return info
 }
