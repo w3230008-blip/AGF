@@ -1,6 +1,9 @@
+import { showToast } from '../../helpers/utils'
+
 const state = {
   audioTracks: [],
-  currentVideoId: null
+  currentVideoId: null,
+  selectedAudioTrackId: null
 }
 
 const getters = {
@@ -10,6 +13,14 @@ const getters = {
 
   getCurrentVideoId(state) {
     return state.currentVideoId
+  },
+
+  getSelectedAudioTrack(state) {
+    if (!state.selectedAudioTrackId) {
+      return null
+    }
+
+    return state.audioTracks.find(track => track.id === state.selectedAudioTrackId) || null
   }
 }
 
@@ -158,6 +169,7 @@ const actions = {
 
     console.warn('[Audio-Metadata-Fetch] Step 4: Committing to store')
     commit('setAudioTracks', sortedTracks)
+    commit('setSelectedAudioTrackId', null)
     commit('setCurrentVideoId', videoId)
 
     console.warn('[Audio-Metadata-Fetch] Audio track collection complete')
@@ -172,6 +184,54 @@ const actions = {
     console.warn('[Audio-Metadata-Fetch] Clearing audio tracks')
     commit('setAudioTracks', [])
     commit('setCurrentVideoId', null)
+    commit('setSelectedAudioTrackId', null)
+  },
+
+  async switchAudioTrack({ state, commit }, audioTrackId) {
+    console.warn('[Audio-Switch-Request] Requested audio track switch:', {
+      audioTrackId,
+      currentVideoId: state.currentVideoId,
+      availableTracks: state.audioTracks.length
+    })
+
+    if (!audioTrackId) {
+      console.warn('[Audio-Switch-Invalid] Missing audioTrackId payload')
+      return { success: false, reason: 'missing-id' }
+    }
+
+    if (!Array.isArray(state.audioTracks) || state.audioTracks.length === 0) {
+      console.warn('[Audio-Switch-Empty] No audio tracks available in store')
+      return { success: false, reason: 'no-tracks' }
+    }
+
+    const targetTrack = state.audioTracks.find(track => track.id === audioTrackId)
+
+    if (!targetTrack) {
+      console.warn('[Audio-Switch-MissingTrack] Track not found for id:', audioTrackId)
+      return { success: false, reason: 'track-not-found' }
+    }
+
+    if (!targetTrack.url) {
+      const lang = targetTrack.languageName || targetTrack.languageCode || audioTrackId
+      console.warn(`[Audio-Switch-NoURL] Cannot switch to ${lang}: no URL available`)
+      showToast('This audio track cannot be played (no URL available)')
+      return { success: false, reason: 'no-url', track: targetTrack }
+    }
+
+    if (state.selectedAudioTrackId === audioTrackId) {
+      console.warn('[Audio-Switch-Noop] Track already selected, skipping switch')
+      return { success: false, reason: 'already-selected', track: targetTrack }
+    }
+
+    commit('setSelectedAudioTrackId', audioTrackId)
+
+    console.warn('[Audio-Switch-WithURL] Ready to switch audio track:', {
+      language: targetTrack.languageCode,
+      source: targetTrack.source,
+      bitrate: targetTrack.bitrate
+    })
+
+    return { success: true, track: targetTrack }
   }
 }
 
@@ -182,6 +242,10 @@ const mutations = {
 
   setCurrentVideoId(state, videoId) {
     state.currentVideoId = videoId
+  },
+
+  setSelectedAudioTrackId(state, audioTrackId) {
+    state.selectedAudioTrackId = audioTrackId
   }
 }
 

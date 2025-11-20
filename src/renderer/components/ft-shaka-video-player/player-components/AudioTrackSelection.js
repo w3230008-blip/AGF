@@ -9,6 +9,7 @@ import {
   getSystemLanguage
 } from '../../../helpers/player/audio-track-utils'
 import { PlayerIcons } from '../../../../constants'
+import store from '../../../store/index'
 
 export class AudioTrackSelection extends shaka.ui.SettingsMenu {
   /**
@@ -29,6 +30,9 @@ export class AudioTrackSelection extends shaka.ui.SettingsMenu {
 
     /** @private */
     this._availableAudioLanguages = availableAudioLanguages
+
+    /** @private */
+    this._events = events
 
     console.warn('[AudioTrackSelection] Initialized with available languages:', availableAudioLanguages)
 
@@ -125,18 +129,18 @@ export class AudioTrackSelection extends shaka.ui.SettingsMenu {
       // Check if this language is currently loaded and active
       const loadedTrack = loadedTracks.find(t => t.language === language)
       const isActive = loadedTrack?.active || false
+      const trackMetadata = this.getTrackMetadataForLanguage_(language)
 
       const button = document.createElement('button')
       button.addEventListener('click', () => {
         if (loadedTrack) {
           // Language is already loaded, just switch to it
-          this.onAudioTrackSelected_(loadedTrack)
-        } else {
-          // Language not loaded yet - need to fetch it dynamically
+          this.onAudioTrackSelected_(loadedTrack, trackMetadata)
+        } else if (trackMetadata) {
           console.warn(`[AudioTrackSelection] User selected unloaded language: ${language}`)
-          // TODO: Implement dynamic audio fetching
-          // For now, just log a message
-          console.warn('[AudioTrackSelection] Dynamic audio fetching not yet implemented')
+          this.requestDynamicAudioTrack_(trackMetadata)
+        } else {
+          console.warn(`[AudioTrackSelection] No metadata is available for language ${language}, cannot switch audio track.`)
         }
       })
 
@@ -183,10 +187,52 @@ export class AudioTrackSelection extends shaka.ui.SettingsMenu {
   }
 
   /**
-   * @param {shaka.extern.AudioTrack} track
+   * @param {string} language
+   * @returns {object|null}
    * @private
    */
-  onAudioTrackSelected_(track) {
+  getTrackMetadataForLanguage_(language) {
+    if (!language) {
+      return null
+    }
+
+    const tracks = store.getters.getAudioTracks || []
+    const normalizedLanguage = language.toLowerCase()
+
+    return tracks.find(track => (track.languageCode || '').toLowerCase() === normalizedLanguage) || null
+  }
+
+  /**
+   * @param {object} trackMetadata
+   * @private
+   */
+  requestDynamicAudioTrack_(trackMetadata) {
+    if (!trackMetadata?.id) {
+      console.warn('[AudioTrackSelection] Cannot dispatch audio switch request without track metadata id')
+      return
+    }
+
+    console.warn('[AudioTrackSelection] Dispatching audio track switch request via event bus:', {
+      id: trackMetadata.id,
+      language: trackMetadata.languageCode,
+      hasUrl: !!trackMetadata.url,
+      source: trackMetadata.source
+    })
+
+    this._events?.dispatchEvent(new CustomEvent('audioTrackSwitchRequested', {
+      detail: {
+        audioTrackId: trackMetadata.id,
+        language: trackMetadata.languageCode
+      }
+    }))
+  }
+
+  /**
+   * @param {shaka.extern.AudioTrack} track
+   * @param {object|null} trackMetadata
+   * @private
+   */
+  onAudioTrackSelected_(track, trackMetadata = null) {
     console.warn('[AudioTrackSelection] User selected audio track:', {
       language: track.language,
       label: track.label
@@ -225,6 +271,24 @@ export class AudioTrackSelection extends shaka.ui.SettingsMenu {
     this._languageCodeSpan.textContent = langCode
 
     console.warn('[AudioTrackSelection] Audio track switched successfully')
+
+    this.rememberAudioTrackSelection_(track, trackMetadata)
+  }
+
+  /**
+   * @param {shaka.extern.AudioTrack} track
+   * @param {object|null} trackMetadata
+   * @private
+   */
+  rememberAudioTrackSelection_(track, trackMetadata) {
+    const metadata = trackMetadata ?? this.getTrackMetadataForLanguage_(track?.language)
+
+    if (!metadata?.id) {
+      console.warn('[AudioTrackSelection] Unable to persist audio selection in store - missing metadata')
+      return
+    }
+
+    store.dispatch('switchAudioTrack', metadata.id)
   }
 
   /** @private */
