@@ -3107,6 +3107,12 @@ export default defineComponent({
             tracks: shakaAudioTracks.map(t => ({ language: t.language, label: t.label, active: t.active }))
           })
 
+          // Log available audio languages from metadata
+          console.warn('[Audio-Fetch] Available audio languages from metadata:', {
+            count: props.availableAudioLanguages?.length || 0,
+            languages: props.availableAudioLanguages || []
+          })
+
           // Get selected audio language preference from settings
           const selectedAudioLanguageCode = store.getters.getSelectedAudioLanguageCode
           console.warn('[Audio-Preference-Load] Selected audio language code from settings:', selectedAudioLanguageCode)
@@ -3195,7 +3201,7 @@ export default defineComponent({
             }
           }
 
-          return new AudioTrackButton(shakaAudioTracks, currentAudioTrack, onAudioTrackChange, rootElement, controls)
+          return new AudioTrackButton(shakaAudioTracks, currentAudioTrack, onAudioTrackChange, rootElement, controls, props.availableAudioLanguages || [])
         }
       }
 
