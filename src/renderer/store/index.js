@@ -11,6 +11,7 @@ import searchHistory from './modules/search-history'
 import subscriptionCache from './modules/subscription-cache'
 import utils from './modules/utils'
 import player from './modules/player'
+import video from './modules/video'
 
 Vue.use(Vuex)
 
@@ -25,6 +26,7 @@ export default new Vuex.Store({
     subscriptionCache,
     utils,
     player,
+    video,
   },
 
   // Detects unsafe changes to the store state e.g. outside of mutations
