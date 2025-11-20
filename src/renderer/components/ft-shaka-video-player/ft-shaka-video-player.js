@@ -191,6 +191,8 @@ export default defineComponent({
     /** @type {shaka.ui.Overlay|null} */
     let ui = null
 
+    let isAudioSwitchInProgress = false
+
     const events = new EventTarget()
 
     /** @type {import('vue').Ref<HTMLDivElement | null>} */
@@ -2905,10 +2907,115 @@ export default defineComponent({
       shakaOverflowMenu.registerElement('ft_audio_tracks', new AudioTrackSelectionFactory())
     }
 
+    function registerAudioTrackSwitchHandler() {
+      events.addEventListener('audioTrackSwitchRequested', async (/** @type {CustomEvent} */ event) => {
+        const audioTrackId = event.detail?.audioTrackId
+
+        if (!audioTrackId) {
+          console.warn('[Audio-Switch-InvalidPayload] Missing audioTrackId in switch request')
+          return
+        }
+
+        await handleAudioTrackSwitch(audioTrackId)
+      })
+    }
+
+    async function handleAudioTrackSwitch(audioTrackId) {
+      if (!player) {
+        console.warn('[Audio-Switch-PlayerMissing] Cannot switch audio track because Shaka player is unavailable')
+        return
+      }
+
+      if (isAudioSwitchInProgress) {
+        console.warn('[Audio-Switch-InProgress] Audio track switch already running, ignoring new request')
+        return
+      }
+
+      console.warn('[Audio-Switch-Start] Handling audio switch request', { audioTrackId })
+
+      isAudioSwitchInProgress = true
+
+      try {
+        const result = await store.dispatch('switchAudioTrack', audioTrackId)
+
+        if (!result || !result.success) {
+          console.warn('[Audio-Switch-Abort] Store rejected audio switch request', result)
+          return
+        }
+
+        const trackMetadata = result.track
+        const videoElement = video.value
+
+        if (!videoElement) {
+          console.warn('[Audio-Switch-NoVideo] Unable to access video element, aborting audio switch')
+          return
+        }
+
+        const playbackSnapshot = {
+          time: videoElement.currentTime,
+          paused: videoElement.paused,
+          volume: videoElement.volume,
+          muted: videoElement.muted
+        }
+
+        console.warn('[Audio-Switch-State] Captured playback snapshot', playbackSnapshot)
+
+        const matchingTrack = findMatchingShakaAudioTrack(trackMetadata)
+
+        if (!matchingTrack) {
+          console.warn('[Audio-Switch-Unavailable] Requested track not present in current manifest', trackMetadata)
+          showToast('This audio track is not available in the current stream')
+          return
+        }
+
+        player.selectAudioTrack(matchingTrack)
+
+        if (Math.abs(videoElement.currentTime - playbackSnapshot.time) > 0.01) {
+          videoElement.currentTime = playbackSnapshot.time
+        }
+
+        videoElement.volume = playbackSnapshot.volume
+        videoElement.muted = playbackSnapshot.muted
+
+        if (!playbackSnapshot.paused && videoElement.paused) {
+          try {
+            await videoElement.play()
+          } catch (error) {
+            console.error('[Audio-Switch-ResumeFailed]', error)
+          }
+        }
+
+        console.warn('[Audio-Switch-WithURL] Completed switch to track:', {
+          language: trackMetadata.languageCode,
+          source: trackMetadata.source,
+          bitrate: trackMetadata.bitrate
+        })
+      } finally {
+        isAudioSwitchInProgress = false
+      }
+    }
+
+    function findMatchingShakaAudioTrack(trackMetadata) {
+      if (!player || !trackMetadata) {
+        return null
+      }
+
+      const availableTracks = Array.from(deduplicateAudioTracks(player.getAudioTracks()).values())
+      const normalizedLanguage = (trackMetadata.languageCode || '').toLowerCase()
+
+      let matchingTrack = availableTracks.find(track => (track.language || '').toLowerCase() === normalizedLanguage)
+
+      if (!matchingTrack && trackMetadata.formatId) {
+        matchingTrack = availableTracks.find(track => (track.originalAudioId || '').startsWith(String(trackMetadata.formatId)))
+      }
+
+      return matchingTrack || null
+    }
+
     function registerAudioTrackButton() {
       events.addEventListener('audioTrackChanged', (/** @type {CustomEvent} */ event) => {
         // Handle audio track changes if needed
-        console.log('[AudioTrackButton] Audio track changed event received:', event.detail)
+        console.warn('[AudioTrackButton] Audio track changed event received:', event.detail)
       })
 
       /** @implements {shaka.extern.IUIElement.Factory} */
@@ -2921,7 +3028,7 @@ export default defineComponent({
           const onAudioTrackChange = (track) => {
             if (player) {
               player.selectAudioTrack(track)
-              console.log('[AudioTrackButton] Audio track changed to:', track.language)
+              console.warn('[AudioTrackButton] Audio track changed to:', track.language)
             }
           }
 
@@ -3992,6 +4099,7 @@ export default defineComponent({
 
       registerScreenshotButton()
       registerAudioTrackSelection()
+      registerAudioTrackSwitchHandler()
       registerAudioTrackButton()
       registerAutoplayToggle()
       registerCaptionsLineToggle()
