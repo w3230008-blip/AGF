@@ -1335,11 +1335,14 @@ export default defineComponent({
       }
 
       if (this.blockVideoAutoplay) {
-        showToast(this.$t('Autoplay Interruption Timer',
-          this.defaultAutoplayInterruptionIntervalHours,
-          {
-            autoplayInterruptionIntervalHours: this.defaultAutoplayInterruptionIntervalHours
-          }),
+        showToast(
+          this.$t(
+            'Autoplay Interruption Timer',
+            this.defaultAutoplayInterruptionIntervalHours,
+            {
+              autoplayInterruptionIntervalHours: this.defaultAutoplayInterruptionIntervalHours
+            }
+          ),
           3_600_000
         )
         this.resetAutoplayInterruptionTimeout()
@@ -1508,11 +1511,59 @@ export default defineComponent({
      * @param {boolean} includeThumbnails
      */
     createLocalDashManifest: async function (videoInfo, includeThumbnails = false) {
+      // === [Audio-Sources-Debug] DASH MANIFEST ANALYSIS ===
+      console.warn(`[Audio-Sources-Debug] === DASH MANIFEST GENERATION FOR VIDEO ${this.videoId} ===`)
+
+      const adaptiveFormats = videoInfo.streaming_data?.adaptive_formats || []
+      const dashAudioFormats = adaptiveFormats.filter(f => f.has_audio && !f.has_video)
+      console.warn(`[Audio-Sources-Debug] DASH: Found ${dashAudioFormats.length} audio-only formats before toDash()`)
+
+      dashAudioFormats.forEach((format, index) => {
+        console.warn(`[Audio-Sources-Debug] DASH Audio Format #${index + 1}:`, {
+          itag: format.itag,
+          language: format.language,
+          audioQuality: format.audio_quality,
+          isOriginal: format.is_original,
+          isDubbed: format.is_dubbed,
+          isDescriptive: format.is_descriptive,
+          isSecondary: format.is_secondary,
+          isAutoDubbed: format.is_auto_dubbed,
+          audioTrack: format.audio_track,
+          mimeType: format.mime_type,
+          bitrate: format.bitrate,
+          hasUrl: !!(format.url || format.freeTubeUrl),
+          urlAvailable: format.url ? 'YES' : 'NO',
+          freeTubeUrlAvailable: format.freeTubeUrl ? 'YES' : 'NO'
+        })
+      })
+
       const xmlData = await videoInfo.toDash({
         manifest_options: {
           include_thumbnails: includeThumbnails,
         },
       })
+
+      // Parse the generated DASH XML to see what audio tracks are included
+      const parser = new DOMParser()
+      const xmlDoc = parser.parseFromString(xmlData, 'text/xml')
+      const audioAdaptationSets = xmlDoc.querySelectorAll('AdaptationSet[mimeType*="audio"]')
+
+      console.warn(`[Audio-Sources-Debug] DASH: Generated manifest contains ${audioAdaptationSets.length} audio AdaptationSets`)
+
+      audioAdaptationSets.forEach((adaptationSet, index) => {
+        const lang = adaptationSet.getAttribute('lang')
+        const label = adaptationSet.querySelector('Label')?.textContent
+        const audioTrackId = adaptationSet.getAttribute('id')
+
+        console.warn(`[Audio-Sources-Debug] DASH AdaptationSet #${index + 1}:`, {
+          id: audioTrackId,
+          language: lang,
+          label: label,
+          representationCount: adaptationSet.querySelectorAll('Representation').length
+        })
+      })
+
+      console.warn('[Audio-Sources-Debug] === END DASH MANIFEST ANALYSIS ===')
 
       return `data:application/dash+xml;charset=UTF-8,${encodeURIComponent(xmlData)}`
     },
