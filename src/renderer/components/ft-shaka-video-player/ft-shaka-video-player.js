@@ -9,6 +9,7 @@ import FtCustomSubtitleDisplay from '../FtCustomSubtitleDisplay/FtCustomSubtitle
 import CustomSubtitleSettings from '../CustomSubtitleSettings/CustomSubtitleSettings.vue'
 import { DefaultFolderKind, KeyboardShortcuts } from '../../../constants'
 import { AudioTrackSelection } from './player-components/AudioTrackSelection'
+import { AudioTrackButton } from './player-components/AudioTrackButton'
 import { FullWindowButton } from './player-components/FullWindowButton'
 import { LegacyQualitySelection } from './player-components/LegacyQualitySelection'
 import { ScreenshotButton } from './player-components/ScreenshotButton'
@@ -1739,6 +1740,7 @@ export default defineComponent({
           'ft_playback_speed_buttons',
           'ft_chapter_navigation_buttons',
           'spacer',
+          'ft_audio_track_button',
           'ft_screenshot',
           'ft_subtitle_toggle',
           'ft_custom_subtitle',
@@ -2903,6 +2905,33 @@ export default defineComponent({
       shakaOverflowMenu.registerElement('ft_audio_tracks', new AudioTrackSelectionFactory())
     }
 
+    function registerAudioTrackButton() {
+      events.addEventListener('audioTrackChanged', (/** @type {CustomEvent} */ event) => {
+        // Handle audio track changes if needed
+        console.log('[AudioTrackButton] Audio track changed event received:', event.detail)
+      })
+
+      /** @implements {shaka.extern.IUIElement.Factory} */
+      class AudioTrackButtonFactory {
+        create(rootElement, controls) {
+          // Get current audio tracks from player
+          const audioTracks = player ? player.getAudioTracks() : []
+          const currentAudioTrack = audioTracks.find(track => track.active) || null
+
+          const onAudioTrackChange = (track) => {
+            if (player) {
+              player.selectAudioTrack(track)
+              console.log('[AudioTrackButton] Audio track changed to:', track.language)
+            }
+          }
+
+          return new AudioTrackButton(audioTracks, currentAudioTrack, onAudioTrackChange, rootElement, controls)
+        }
+      }
+
+      shakaControls.registerElement('ft_audio_track_button', new AudioTrackButtonFactory())
+    }
+
     function registerAutoplayToggle() {
       events.addEventListener('toggleAutoplay', () => {
         emit('toggle-autoplay')
@@ -3478,6 +3507,21 @@ export default defineComponent({
         return
       }
 
+      // Allow Alt+A for audio track switching
+      if (event.altKey && event.key.toLowerCase() === 'a') {
+        event.preventDefault()
+        // Trigger audio track button click or cycle through audio tracks
+        const audioTracks = player.getAudioTracks()
+        if (audioTracks.length > 1) {
+          const currentTrack = audioTracks.find(track => track.active)
+          const currentIndex = audioTracks.indexOf(currentTrack)
+          const nextIndex = (currentIndex + 1) % audioTracks.length
+          player.selectAudioTrack(audioTracks[nextIndex])
+          console.warn('[Audio-Button-Click] Audio track switched via Alt+A shortcut')
+        }
+        return
+      }
+
       if (document.activeElement.classList.contains('ft-input') || event.altKey) {
         return
       }
@@ -3948,6 +3992,7 @@ export default defineComponent({
 
       registerScreenshotButton()
       registerAudioTrackSelection()
+      registerAudioTrackButton()
       registerAutoplayToggle()
       registerCaptionsLineToggle()
       registerCaptionSettingsButton()
