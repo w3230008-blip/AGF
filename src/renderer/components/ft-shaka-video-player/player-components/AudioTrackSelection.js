@@ -266,6 +266,12 @@ export class AudioTrackSelection extends shaka.ui.SettingsMenu {
       saveAudioTrackPreference(this._videoId, langCode)
     }
 
+    // Save global last-used audio language preference
+    if (track.language && track.language !== 'und') {
+      const languageCode = track.language.split('-')[0]
+      store.dispatch('updateSelectedAudioLanguageCode', languageCode)
+    }
+
     // Update language code display
     const langCode = getLanguageCodeShort(track.language)
     this._languageCodeSpan.textContent = langCode

@@ -3029,6 +3029,12 @@ export default defineComponent({
             if (player) {
               player.selectAudioTrack(track)
               console.warn('[AudioTrackButton] Audio track changed to:', track.language)
+
+              // Save the selected audio language preference
+              const languageCode = track.language ? track.language.split('-')[0] : null
+              if (languageCode && languageCode !== 'und') {
+                store.dispatch('updateSelectedAudioLanguageCode', languageCode)
+              }
             }
           }
 
@@ -4333,9 +4339,64 @@ export default defineComponent({
         checkAndAutoDisableSubtitles()
       })
 
+      // Apply saved audio language preference
+      nextTick(() => {
+        applyAudioLanguagePreference()
+      })
+
       if (startInFullscreen && process.env.IS_ELECTRON) {
         startInFullscreen = false
         window.ftElectron.requestFullscreen()
+      }
+    }
+
+    /**
+     * Apply saved audio language preference when video loads
+     */
+    function applyAudioLanguagePreference() {
+      if (!player || !hasLoaded.value) {
+        return
+      }
+
+      // Don't apply for legacy formats (audio-only or combined streams)
+      if (props.format === 'legacy') {
+        return
+      }
+
+      try {
+        const savedLanguageCode = store.getters.getSelectedAudioLanguageCode
+
+        if (!savedLanguageCode) {
+          console.warn('[Audio-Preference-Loaded] No saved preference, using default audio track')
+          return
+        }
+
+        console.warn('[Audio-Preference-Loaded]', savedLanguageCode)
+
+        const audioTracks = player.getAudioTracks()
+        const currentAudioTrack = audioTracks.find(track => track.active)
+
+        if (!audioTracks || audioTracks.length <= 1) {
+          return
+        }
+
+        // Check if saved language is available
+        const preferredTrack = audioTracks.find(track => {
+          const trackLangCode = track.language ? track.language.split('-')[0].toLowerCase() : ''
+          return trackLangCode === savedLanguageCode.toLowerCase()
+        })
+
+        if (preferredTrack) {
+          // Only switch if it's not already active
+          if (!currentAudioTrack || currentAudioTrack.language !== preferredTrack.language) {
+            player.selectAudioTrack(preferredTrack)
+            console.warn('[Audio-Preference-Loaded] Applied saved preference:', savedLanguageCode)
+          }
+        } else {
+          console.warn('[Audio-Preference-Loaded] Saved preference not available in current video, using default')
+        }
+      } catch (error) {
+        console.error('[Audio-Preference-Loaded] Error applying audio language preference:', error)
       }
     }
 
