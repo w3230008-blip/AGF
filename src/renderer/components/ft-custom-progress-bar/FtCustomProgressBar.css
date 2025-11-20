@@ -1,0 +1,101 @@
+.ft-custom-progress-bar-container {
+  position: relative;
+  inline-size: 100%;
+  cursor: pointer;
+  user-select: none;
+  z-index: 10000;
+}
+
+.ft-custom-progress-bar-track {
+  position: relative;
+  inline-size: 100%;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.ft-custom-progress-bar-buffered,
+.ft-custom-progress-bar-progress,
+.ft-custom-progress-bar-hover {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  block-size: 100%;
+  border-radius: 3px;
+  pointer-events: none;
+  transition: inline-size 0.1s ease;
+}
+
+.ft-custom-progress-bar-buffered {
+  z-index: 1;
+}
+
+.ft-custom-progress-bar-hover {
+  z-index: 2;
+}
+
+.ft-custom-progress-bar-progress {
+  z-index: 3;
+}
+
+.ft-custom-progress-bar-chapters {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.ft-custom-progress-bar-chapter-marker {
+  position: absolute;
+  inset-block-start: 0;
+  inline-size: 3px;
+  block-size: 100%;
+  pointer-events: none;
+  box-shadow: 0 0 2px rgb(0 0 0 / 50%);
+}
+
+.ft-custom-progress-bar-handle {
+  position: absolute;
+  inset-block-start: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  z-index: 5;
+  pointer-events: none;
+  transition: inset-inline-start 0.1s ease;
+  opacity: 0;
+}
+
+.ft-custom-progress-bar-container:hover .ft-custom-progress-bar-handle {
+  opacity: 1;
+}
+
+.ft-custom-progress-bar-tooltip {
+  position: absolute;
+  background-color: rgb(0 0 0 / 85%);
+  color: var(--primary-text-color);
+  padding-block: 6px;
+  padding-inline: 10px;
+  border-radius: 4px;
+  font-size: 13px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 6;
+  max-inline-size: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ft-custom-progress-bar-tooltip::after {
+  content: '';
+  position: absolute;
+  inset-block-end: -4px;
+  inset-inline-start: 50%;
+  transform: translateX(-50%);
+  inline-size: 0;
+  block-size: 0;
+  border-inline-start: 4px solid transparent;
+  border-inline-end: 4px solid transparent;
+  border-block-start: 4px solid rgb(0 0 0 / 85%);
+}

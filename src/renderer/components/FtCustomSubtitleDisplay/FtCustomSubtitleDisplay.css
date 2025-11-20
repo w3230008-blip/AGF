@@ -1,0 +1,22 @@
+.customSubtitleDisplay {
+  position: absolute;
+  inset-inline-start: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  pointer-events: none;
+  text-align: center;
+}
+
+.subtitleText {
+  padding-block: 8px;
+  padding-inline: 16px;
+  border-radius: 4px;
+  line-height: 1.4;
+  font-weight: 500;
+  overflow-wrap: break-word;
+  max-inline-size: 100%;
+  display: inline-block;
+}

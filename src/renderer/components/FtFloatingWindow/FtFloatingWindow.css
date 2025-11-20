@@ -1,0 +1,61 @@
+.floatingWindow {
+  position: fixed;
+  z-index: 9999;
+  background-color: var(--card-bg-color);
+  border: 1px solid var(--side-nav-hover-color);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 30%);
+  min-inline-size: 300px;
+  max-inline-size: 90vw;
+  max-block-size: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.floatingWindow.dragging {
+  cursor: move;
+  user-select: none;
+}
+
+.floatingWindowHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-block: 12px;
+  padding-inline: 16px;
+  border-block-end: 1px solid var(--side-nav-hover-color);
+  cursor: move;
+  background-color: var(--card-bg-color);
+  border-start-start-radius: 8px;
+  border-start-end-radius: 8px;
+}
+
+.floatingWindowTitle {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--primary-text-color);
+  user-select: none;
+}
+
+.floatingWindowContent {
+  padding: 16px;
+  overflow-y: auto;
+  color: var(--primary-text-color);
+}
+
+.floatingWindowContent::-webkit-scrollbar {
+  inline-size: 8px;
+}
+
+.floatingWindowContent::-webkit-scrollbar-track {
+  background: var(--card-bg-color);
+}
+
+.floatingWindowContent::-webkit-scrollbar-thumb {
+  background: var(--side-nav-hover-color);
+  border-radius: 4px;
+}
+
+.floatingWindowContent::-webkit-scrollbar-thumb:hover {
+  background: var(--primary-color);
+}
