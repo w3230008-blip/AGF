@@ -79,7 +79,7 @@
   "devDependencies": {
     "@babel/core": "^7.28.4",
     "@babel/preset-env": "^7.28.3",
-    "@double-great/stylelint-a11y": "^3.4.0",
+    "@double-great/stylelint-a11y": "^3.4.1",
     "@eslint/js": "^9.38.0",
     "@intlify/eslint-plugin-vue-i18n": "^3.2.0",
     "babel-loader": "^10.0.0",
