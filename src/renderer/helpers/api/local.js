@@ -474,6 +474,33 @@ export async function getLocalVideoInfo(id) {
 
   console.warn(`[MultiAudio] WEB client has ${webAdaptiveFormats.length} total formats, ${webAdaptiveFormats.filter(f => f.has_audio).length} audio formats`)
 
+  // === [Audio-Sources-Debug] WEB CLIENT ANALYSIS ===
+  console.warn(`[Audio-Sources-Debug] === WEB CLIENT DATA FOR VIDEO ${id} ===`)
+  const webAudioFormats = webAdaptiveFormats.filter(f => f.has_audio)
+  console.warn(`[Audio-Sources-Debug] WEB: Found ${webAudioFormats.length} audio formats`)
+
+  webAudioFormats.forEach((format, index) => {
+    console.warn(`[Audio-Sources-Debug] WEB Audio Format #${index + 1}:`, {
+      itag: format.itag,
+      language: format.language,
+      languageCode: format.language, // Same as language in youtubei.js
+      audioQuality: format.audio_quality,
+      hasAudio: format.has_audio,
+      hasVideo: format.has_video,
+      isOriginal: format.is_original,
+      isDubbed: format.is_dubbed,
+      isDescriptive: format.is_descriptive,
+      isSecondary: format.is_secondary,
+      isAutoDubbed: format.is_auto_dubbed,
+      audioTrack: format.audio_track,
+      mimeType: format.mime_type,
+      bitrate: format.bitrate,
+      hasUrl: !!(format.url || format.freeTubeUrl),
+      urlAvailable: format.url ? 'YES' : 'NO',
+      freeTubeUrlAvailable: format.freeTubeUrl ? 'YES' : 'NO'
+    })
+  })
+
   // Extract available audio languages from WEB client for UI display
   const availableAudioLanguages = new Set()
   webAdaptiveFormats.forEach(format => {
@@ -484,14 +511,43 @@ export async function getLocalVideoInfo(id) {
 
   // Store available languages in info object for later use
   info.availableAudioLanguages = Array.from(availableAudioLanguages)
-  console.warn(`[MultiAudio] Available audio languages:`, info.availableAudioLanguages)
+  console.warn('[MultiAudio] Available audio languages:', info.availableAudioLanguages)
 
   // Use MWEB fallback for playable formats (has URLs, but only one language)
   const mwebInfo = await webInnertube.getBasicInfo(id, { client: 'MWEB', po_token: contentPoToken })
 
   console.warn(`[MultiAudio] MWEB playability status: ${mwebInfo.playability_status.status}`)
 
+  // === [Audio-Sources-Debug] MWEB CLIENT ANALYSIS ===
+  let mwebAudioFormats = []
   if (mwebInfo.playability_status.status === 'OK' && mwebInfo.streaming_data) {
+    console.warn(`[Audio-Sources-Debug] === MWEB CLIENT DATA FOR VIDEO ${id} ===`)
+    const mwebAdaptiveFormats = mwebInfo.streaming_data?.adaptive_formats || []
+    mwebAudioFormats = mwebAdaptiveFormats.filter(f => f.has_audio)
+    console.warn(`[Audio-Sources-Debug] MWEB: Found ${mwebAudioFormats.length} audio formats`)
+
+    mwebAudioFormats.forEach((format, index) => {
+      console.warn(`[Audio-Sources-Debug] MWEB Audio Format #${index + 1}:`, {
+        itag: format.itag,
+        language: format.language,
+        languageCode: format.language,
+        audioQuality: format.audio_quality,
+        hasAudio: format.has_audio,
+        hasVideo: format.has_video,
+        isOriginal: format.is_original,
+        isDubbed: format.is_dubbed,
+        isDescriptive: format.is_descriptive,
+        isSecondary: format.is_secondary,
+        isAutoDubbed: format.is_auto_dubbed,
+        audioTrack: format.audio_track,
+        mimeType: format.mime_type,
+        bitrate: format.bitrate,
+        hasUrl: !!(format.url || format.freeTubeUrl),
+        urlAvailable: format.url ? 'YES' : 'NO',
+        freeTubeUrlAvailable: format.freeTubeUrl ? 'YES' : 'NO'
+      })
+    })
+
     info.playability_status = mwebInfo.playability_status
     info.streaming_data = mwebInfo.streaming_data
     clientName = 'MWEB'
@@ -576,6 +632,38 @@ export async function getLocalVideoInfo(id) {
       info.streaming_data.dash_manifest_url = url
     }
   }
+
+  const webLanguageList = [...new Set(webAudioFormats.map(format => format.language).filter(Boolean))]
+  const webHasUrls = webAudioFormats.some(format => format.url || format.freeTubeUrl)
+
+  const mwebLanguageList = [...new Set(mwebAudioFormats.map(format => format.language).filter(Boolean))]
+  const mwebHasUrls = mwebAudioFormats.some(format => format.url || format.freeTubeUrl)
+
+  const dashAudioFormats = (info.streaming_data?.adaptive_formats || []).filter(format => format.has_audio)
+  const dashLanguageList = [...new Set(dashAudioFormats.map(format => format.language).filter(Boolean))]
+  const dashHasUrls = dashAudioFormats.some(format => format.url || format.freeTubeUrl)
+
+  console.warn(`[Audio-Sources-Debug] Source comparison for video ${id}:`, {
+    web: {
+      languageCount: webLanguageList.length,
+      languages: webLanguageList,
+      urlsAvailable: webHasUrls ? 'YES' : 'NO',
+      note: 'WEB exposes all metadata but URLs are usually missing'
+    },
+    mweb: {
+      languageCount: mwebLanguageList.length,
+      languages: mwebLanguageList,
+      urlsAvailable: mwebHasUrls ? 'YES' : 'NO',
+      note: 'MWEB returns playable URLs but typically only one server-selected language'
+    },
+    dash: {
+      languageCount: dashLanguageList.length,
+      languages: dashLanguageList,
+      urlsAvailable: dashHasUrls ? 'YES' : 'NO',
+      manifestUrlPresent: !!info.streaming_data?.dash_manifest_url,
+      note: 'DASH manifest inherits whatever streaming_data currently holds'
+    }
+  })
 
   if (info.captions?.caption_tracks) {
     for (const captionTrack of info.captions.caption_tracks) {
