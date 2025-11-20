@@ -563,10 +563,11 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  padding: 4px 6px;
+  padding-block: 4px;
+  padding-inline: 6px;
   background: rgb(255 255 255 / 15%);
   border-radius: 3px;
-  min-width: 24px;
+  min-inline-size: 24px;
   text-align: center;
   line-height: 1;
   transition: background-color 0.2s ease;
@@ -577,21 +578,20 @@
 }
 
 /* Ensure the button has proper spacing */
-:deep(.audio-track-button) {
-  margin: 0 2px;
-}
 
 /* Audio Track Button */
 :deep(.audio-track-button-container) {
   display: flex;
   position: relative;
-  margin: 0 2px;
+  margin-block: 0;
+  margin-inline: 2px;
 }
 
 :deep(.audio-track-button) {
-  min-width: 40px;
-  height: 32px;
-  padding: 4px 8px;
+  min-inline-size: 40px;
+  block-size: 32px;
+  padding-block: 4px;
+  padding-inline: 8px;
   background-color: transparent;
   color: #fff;
   border: 1px solid rgb(255 255 255 / 30%);
@@ -624,39 +624,33 @@
   line-height: 1;
 }
 
-:deep(.audio-track-language-code) {
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1;
-  min-width: 20px;
-  text-align: center;
-}
-
 /* Audio Track Dropdown */
 :deep(.audio-track-dropdown) {
   position: absolute;
-  bottom: 100%;
-  left: 50%;
+  inset-block-end: 100%;
+  inset-inline-start: 50%;
   transform: translateX(-50%);
   background-color: rgb(0 0 0 / 90%);
   border: 1px solid rgb(255 255 255 / 30%);
   border-radius: 4px;
-  padding: 4px 0;
-  margin-bottom: 4px;
-  min-width: 180px;
-  max-height: 200px;
+  padding-block: 4px;
+  padding-inline: 0;
+  margin-block-end: 4px;
+  min-inline-size: 180px;
+  max-block-size: 200px;
   overflow-y: auto;
   z-index: 1000;
   box-shadow: 0 4px 12px rgb(0 0 0 / 50%);
 }
 
 :deep(.audio-track-option) {
-  width: 100%;
-  padding: 8px 12px;
+  inline-size: 100%;
+  padding-block: 8px;
+  padding-inline: 12px;
   background-color: transparent;
   color: #fff;
-  border: none;
-  text-align: left;
+  border: 0;
+  text-align: start;
   font-size: 14px;
   cursor: pointer;
   display: flex;
@@ -691,6 +685,30 @@
   color: var(--primary-color, #0080ff);
   font-weight: bold;
   flex-shrink: 0;
+}
+
+/* Audio track disabled/unavailable styling */
+:deep(.audio-track-option.audio-track-disabled) {
+  opacity: 0.5;
+  color: #999;
+  cursor: default !important;
+  pointer-events: none;
+}
+
+:deep(.audio-track-option.audio-track-disabled:hover) {
+  background-color: transparent !important;
+}
+
+:deep(.audio-track-lang-code) {
+  color: rgb(255 255 255 / 70%);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+:deep(.audio-track-unavailable) {
+  color: rgb(255 100 100 / 80%);
+  font-size: 11px;
+  font-weight: 400;
 }
 
 /* Hide the default icon since we're using language code */

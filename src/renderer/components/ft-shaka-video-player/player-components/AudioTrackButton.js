@@ -9,8 +9,9 @@ export class AudioTrackButton extends shaka.ui.Element {
    * @param {Function} onAudioTrackChange - Callback for audio track change
    * @param {HTMLElement} parent
    * @param {shaka.ui.Controls} controls
+   * @param {Array} availableAudioLanguages - Array of all available language codes (13 languages)
    */
-  constructor(audioTracks, currentAudioTrack, onAudioTrackChange, parent, controls) {
+  constructor(audioTracks, currentAudioTrack, onAudioTrackChange, parent, controls, availableAudioLanguages = []) {
     super(parent, controls)
 
     /** @private */
@@ -19,6 +20,8 @@ export class AudioTrackButton extends shaka.ui.Element {
     this.currentAudioTrack_ = currentAudioTrack
     /** @private */
     this.onAudioTrackChange_ = onAudioTrackChange
+    /** @private */
+    this.availableAudioLanguages_ = availableAudioLanguages || []
 
     /** @private */
     this.container_ = document.createElement('div')
@@ -47,7 +50,7 @@ export class AudioTrackButton extends shaka.ui.Element {
     this.dropdown_.style.display = 'none'
 
     this.eventManager.listen(this.button_, 'click', () => {
-      console.log('[Audio-Button-Click] Audio track button clicked')
+      console.warn('[Audio-Button-Click] Audio track button clicked')
       this.toggleDropdown_()
     })
 
@@ -83,10 +86,14 @@ export class AudioTrackButton extends shaka.ui.Element {
    * Update audio tracks data
    * @param {Array} audioTracks - New audio tracks array
    * @param {object} currentAudioTrack - New current audio track
+   * @param {Array} availableAudioLanguages - New available audio languages array
    */
-  updateAudioTracks(audioTracks, currentAudioTrack) {
+  updateAudioTracks(audioTracks, currentAudioTrack, availableAudioLanguages = null) {
     this.audioTracks_ = audioTracks || []
     this.currentAudioTrack_ = currentAudioTrack
+    if (availableAudioLanguages !== null) {
+      this.availableAudioLanguages_ = availableAudioLanguages
+    }
     this.updateButton_()
     this.updateDropdown_()
   }
@@ -110,8 +117,9 @@ export class AudioTrackButton extends shaka.ui.Element {
    * @private
    */
   updateButton_() {
-    // Only show button if there are multiple audio tracks
-    if (this.audioTracks_.length <= 1) {
+    // Show button if there are multiple audio tracks OR multiple available languages
+    const totalLanguages = Math.max(this.audioTracks_.length, this.availableAudioLanguages_.length)
+    if (totalLanguages <= 1) {
       this.container_.style.display = 'none'
       return
     }
@@ -136,36 +144,77 @@ export class AudioTrackButton extends shaka.ui.Element {
       this.dropdown_.removeChild(this.dropdown_.firstChild)
     }
 
-    if (this.audioTracks_.length <= 1) {
+    // Determine which languages to show
+    let languagesToShow = []
+    if (this.availableAudioLanguages_.length > 0) {
+      languagesToShow = this.availableAudioLanguages_
+    } else {
+      // Fallback to loaded tracks if no available languages specified
+      languagesToShow = this.audioTracks_.map(track => track.language)
+    }
+
+    const totalLanguages = languagesToShow.length
+    if (totalLanguages <= 1) {
       return
     }
 
-    // Create menu items for each audio track
-    this.audioTracks_.forEach((track, index) => {
+    console.warn(`[Audio-Menu-Render] Rendering ${totalLanguages} languages in menu`)
+
+    const unavailableLanguages = []
+    let renderedCount = 0
+
+    // Create menu items for each language
+    languagesToShow.forEach((languageCode, index) => {
       const trackButton = document.createElement('button')
       trackButton.classList.add('audio-track-option')
 
+      // Find if this language has a loaded track
+      const loadedTrack = this.audioTracks_.find(track =>
+        track.language && track.language.split('-')[0].toLowerCase() === languageCode.split('-')[0].toLowerCase()
+      )
+
+      // Check if this is the current track
+      const isCurrentTrack = this.currentAudioTrack_ &&
+        loadedTrack &&
+        this.currentAudioTrack_.language === loadedTrack.language
+
+      // Create language name container
       const trackName = document.createElement('span')
       trackName.classList.add('audio-track-name')
 
       // Get full language name
-      const languageName = track.label || getLanguageName(track.language)
+      const languageName = getLanguageName(languageCode)
       trackName.textContent = languageName
 
+      // Add language code on the right
+      const langCodeSpan = document.createElement('span')
+      langCodeSpan.classList.add('audio-track-lang-code')
+      langCodeSpan.textContent = ` (${getLanguageCodeShort(languageCode)})`
+      trackName.appendChild(langCodeSpan)
+
       // Add "(Original)" text for original audio track
-      if (track.original) {
+      if (loadedTrack && loadedTrack.original) {
         const originalSpan = document.createElement('span')
         originalSpan.classList.add('audio-track-original')
         originalSpan.textContent = ' (Original)'
         trackName.appendChild(originalSpan)
       }
 
+      // Add availability indicator
+      if (!loadedTrack) {
+        const unavailableSpan = document.createElement('span')
+        unavailableSpan.classList.add('audio-track-unavailable')
+        unavailableSpan.textContent = ' [Unavailable]'
+        trackName.appendChild(unavailableSpan)
+        trackButton.classList.add('audio-track-disabled')
+        trackButton.title = 'Not available (no URL)'
+        unavailableLanguages.push(languageCode)
+      }
+
       trackButton.appendChild(trackName)
 
       // Add checkmark for current track
-      if (this.currentAudioTrack_ && 
-          track.language === this.currentAudioTrack_.language &&
-          track.label === this.currentAudioTrack_.label) {
+      if (isCurrentTrack) {
         const checkmark = document.createElement('span')
         checkmark.classList.add('audio-track-checkmark')
         checkmark.textContent = '✓'
@@ -176,13 +225,27 @@ export class AudioTrackButton extends shaka.ui.Element {
       // Add click handler
       this.eventManager.listen(trackButton, 'click', (event) => {
         event.stopPropagation()
-        console.warn(`[Audio-Track-Selected] Selected audio track: ${track.language} - ${languageName}`)
-        this.onAudioTrackChange_(track)
+
+        if (!loadedTrack) {
+          console.warn(`[Audio-Menu-Click] User clicked unavailable language: ${languageCode}`)
+          // Do nothing for unavailable tracks (Option A: disabled)
+          return
+        }
+
+        console.warn(`[Audio-Menu-Click] User selected available language: ${languageCode}`)
+        console.warn(`[Audio-Track-Selected] Selected audio track: ${loadedTrack.language} - ${languageName}`)
+        this.onAudioTrackChange_(loadedTrack)
         this.closeDropdown_()
       })
 
       this.dropdown_.appendChild(trackButton)
+      renderedCount++
     })
+
+    console.warn(`[Audio-Menu-Render] Successfully rendered ${renderedCount}/${totalLanguages} languages`)
+    if (unavailableLanguages.length > 0) {
+      console.warn(`[Audio-Menu-Unavailable] Disabled languages (no URL): [${unavailableLanguages.join(', ')}]`)
+    }
   }
 
   /**
