@@ -239,11 +239,12 @@ function updateBackgroundColorFromPicker(hex) {
 }
 
 function updateBackgroundOpacity(opacityPercent) {
+  // eslint-disable-next-line no-console
   // console.log('🎬 [CaptionSettings] updateBackgroundOpacity called with:', opacityPercent)
   const { r, g, b } = parseRGBA(currentBackgroundColor.value)
   const alpha = opacityPercent / 100
   const rgba = `rgba(${r}, ${g}, ${b}, ${alpha})`
-
+  // eslint-disable-next-line no-console
   // console.log('🎬 [CaptionSettings] Dispatching background color update:', { rgba, mode: settingsMode.value })
 
   if (settingsMode.value === 'fullscreen') {

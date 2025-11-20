@@ -431,117 +431,6 @@ export async function getLocalSearchContinuation(continuationData) {
 }
 
 /**
- * Get language name from language code using Intl.DisplayNames
- * @param {string} languageCode - Language code (e.g., 'en', 'pl', 'es')
- * @param {string} displayLanguage - Language to display name in (default: 'en')
- * @returns {string} - Full language name
- */
-function getLanguageNameForMetadata(languageCode, displayLanguage = 'en') {
-  if (!languageCode || languageCode === 'und') {
-    return 'Unknown'
-  }
-
-  try {
-    const displayNames = new Intl.DisplayNames([displayLanguage], {
-      type: 'language',
-      languageDisplay: 'standard'
-    })
-    return displayNames.of(languageCode) || languageCode
-  } catch (error) {
-    console.warn(`[Audio-Metadata-Fetch] Failed to get language name for ${languageCode}:`, error)
-    return languageCode
-  }
-}
-
-/**
- * Collect audio metadata from all sources (MWEB, WEB, DASH)
- * @param {Array} webFormats - Audio formats from WEB client
- * @param {Array} mwebFormats - Audio formats from MWEB client
- * @param {Array} dashFormats - Audio formats from DASH
- * @param {Map} mwebUrlsByLanguage - Map of language code to MWEB URL info
- * @returns {object} - Object containing arrays for mweb, web, and dash tracks
- */
-function collectAudioMetadata(webFormats, mwebFormats, dashFormats, mwebUrlsByLanguage = new Map()) {
-  console.warn('[Audio-Metadata-Fetch] Starting metadata collection from all sources')
-
-  const metadata = {
-    mweb: [],
-    web: [],
-    dash: []
-  }
-
-  // Helper function to convert format to track structure
-  const formatToTrack = (format, source, injectedUrl = null) => {
-    const languageCode = format.language || 'und'
-    const languageName = getLanguageNameForMetadata(languageCode)
-    const label = format.audio_track?.display_name?.text || languageName
-    const isOriginal = !!(format.is_original || format.audio_track?.audio_is_default)
-    const formatId = format.itag || null
-
-    // Use injected URL if available, otherwise use format's own URL
-    let url = injectedUrl || format.freeTubeUrl || format.url || null
-
-    // Special handling: if this is a WEB format and we have a MWEB URL for this language, use it
-    if (source === 'WEB' && !url && mwebUrlsByLanguage.has(languageCode)) {
-      const mwebUrlInfo = mwebUrlsByLanguage.get(languageCode)
-      url = mwebUrlInfo.url
-
-      if (mwebUrlInfo.isFallback) {
-        console.warn(`[Audio-Metadata-Fetch] Injected FALLBACK MWEB URL for ${languageCode} (${source}) - from ${mwebUrlInfo.fallbackFrom}`)
-      } else {
-        console.warn(`[Audio-Metadata-Fetch] Injected MWEB URL for ${languageCode} (${source})`)
-      }
-    }
-
-    const bitrate = format.bitrate ? `${Math.round(format.bitrate / 1000)}kbps` : null
-
-    return {
-      id: `${languageCode}_${formatId}`,
-      languageCode,
-      languageName,
-      label,
-      isOriginal,
-      source,
-      url,
-      formatId,
-      bitrate
-    }
-  }
-
-  // Process MWEB formats
-  if (mwebFormats && Array.isArray(mwebFormats)) {
-    console.warn(`[Audio-Metadata-Fetch] Processing ${mwebFormats.length} MWEB audio formats`)
-    mwebFormats.forEach(format => {
-      metadata.mweb.push(formatToTrack(format, 'MWEB'))
-    })
-  }
-
-  // Process WEB formats
-  if (webFormats && Array.isArray(webFormats)) {
-    console.warn(`[Audio-Metadata-Fetch] Processing ${webFormats.length} WEB audio formats`)
-    webFormats.forEach(format => {
-      metadata.web.push(formatToTrack(format, 'WEB'))
-    })
-  }
-
-  // Process DASH formats
-  if (dashFormats && Array.isArray(dashFormats)) {
-    console.warn(`[Audio-Metadata-Fetch] Processing ${dashFormats.length} DASH audio formats`)
-    dashFormats.forEach(format => {
-      metadata.dash.push(formatToTrack(format, 'DASH'))
-    })
-  }
-
-  console.warn('[Audio-Metadata-Fetch] Metadata collection complete:', {
-    mweb: metadata.mweb.length,
-    web: metadata.web.length,
-    dash: metadata.dash.length
-  })
-
-  return metadata
-}
-
-/**
  * @param {string} id
  */
 export async function getLocalVideoInfo(id) {
@@ -585,33 +474,6 @@ export async function getLocalVideoInfo(id) {
 
   console.warn(`[MultiAudio] WEB client has ${webAdaptiveFormats.length} total formats, ${webAdaptiveFormats.filter(f => f.has_audio).length} audio formats`)
 
-  // === [Audio-Sources-Debug] WEB CLIENT ANALYSIS ===
-  console.warn(`[Audio-Sources-Debug] === WEB CLIENT DATA FOR VIDEO ${id} ===`)
-  const webAudioFormats = webAdaptiveFormats.filter(f => f.has_audio)
-  console.warn(`[Audio-Sources-Debug] WEB: Found ${webAudioFormats.length} audio formats`)
-
-  webAudioFormats.forEach((format, index) => {
-    console.warn(`[Audio-Sources-Debug] WEB Audio Format #${index + 1}:`, {
-      itag: format.itag,
-      language: format.language,
-      languageCode: format.language, // Same as language in youtubei.js
-      audioQuality: format.audio_quality,
-      hasAudio: format.has_audio,
-      hasVideo: format.has_video,
-      isOriginal: format.is_original,
-      isDubbed: format.is_dubbed,
-      isDescriptive: format.is_descriptive,
-      isSecondary: format.is_secondary,
-      isAutoDubbed: format.is_auto_dubbed,
-      audioTrack: format.audio_track,
-      mimeType: format.mime_type,
-      bitrate: format.bitrate,
-      hasUrl: !!(format.url || format.freeTubeUrl),
-      urlAvailable: format.url ? 'YES' : 'NO',
-      freeTubeUrlAvailable: format.freeTubeUrl ? 'YES' : 'NO'
-    })
-  })
-
   // Extract available audio languages from WEB client for UI display
   const availableAudioLanguages = new Set()
   webAdaptiveFormats.forEach(format => {
@@ -622,162 +484,14 @@ export async function getLocalVideoInfo(id) {
 
   // Store available languages in info object for later use
   info.availableAudioLanguages = Array.from(availableAudioLanguages)
-  console.warn('[MultiAudio] Available audio languages:', info.availableAudioLanguages)
+  console.warn(`[MultiAudio] Available audio languages:`, info.availableAudioLanguages)
 
-  // NEW APPROACH: Fetch MWEB URLs for ALL available languages
-  console.warn('[Audio-URL-Search] Starting multi-language MWEB URL fetch for', availableAudioLanguages.size, 'languages')
-
-  const mwebUrlsByLanguage = new Map()
-  const languageList = Array.from(availableAudioLanguages)
-
-  // Optimization: If there are too many languages, prioritize commonly used ones
-  const PRIORITY_LANGUAGES = ['en', 'es', 'pt', 'fr', 'de', 'it', 'pl', 'ru', 'ja', 'ko', 'ar', 'hi', 'zh']
-  const sortedLanguageList = languageList.sort((a, b) => {
-    const aIndex = PRIORITY_LANGUAGES.indexOf(a)
-    const bIndex = PRIORITY_LANGUAGES.indexOf(b)
-    if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex
-    if (aIndex !== -1) return -1
-    if (bIndex !== -1) return 1
-    return a.localeCompare(b)
-  })
-
-  // Store original hl to restore later
-  const originalHl = webInnertube.session.context.client.hl
-
-  // Add rate limiting to avoid overwhelming YouTube's servers
-  const REQUEST_DELAY_MS = 200 // 200ms between requests
-  const MAX_FAILURES = 3 // Stop after 3 consecutive failures
-
-  let consecutiveFailures = 0
-
-  for (let i = 0; i < sortedLanguageList.length; i++) {
-    const languageCode = sortedLanguageList[i]
-
-    // Stop if we've had too many consecutive failures
-    if (consecutiveFailures >= MAX_FAILURES) {
-      console.warn(`[Audio-URL-Search] Stopping after ${MAX_FAILURES} consecutive failures`)
-      break
-    }
-
-    // Add delay between requests (except for the first one)
-    if (i > 0) {
-      await new Promise(resolve => setTimeout(resolve, REQUEST_DELAY_MS))
-    }
-
-    try {
-      console.warn(`[Audio-URL-Search-${languageCode}] Fetching MWEB URLs for language: ${languageCode} (${i + 1}/${sortedLanguageList.length})`)
-
-      // Set the language for this request
-      webInnertube.session.context.client.hl = languageCode
-
-      // Make MWEB request for this specific language
-      const mwebInfoForLang = await webInnertube.getBasicInfo(id, { client: 'MWEB', po_token: contentPoToken })
-
-      if (mwebInfoForLang.playability_status.status === 'OK' && mwebInfoForLang.streaming_data) {
-        const mwebAdaptiveFormats = mwebInfoForLang.streaming_data?.adaptive_formats || []
-        const mwebAudioFormats = mwebAdaptiveFormats.filter(f => f.has_audio)
-
-        if (mwebAudioFormats.length > 0) {
-          // Find the audio format that matches our target language
-          const targetFormat = mwebAudioFormats.find(format => format.language === languageCode)
-          if (targetFormat && (targetFormat.url || targetFormat.freeTubeUrl)) {
-            mwebUrlsByLanguage.set(languageCode, {
-              url: targetFormat.url || targetFormat.freeTubeUrl,
-              itag: targetFormat.itag,
-              bitrate: targetFormat.bitrate
-            })
-            console.warn(`[Audio-URL-Search-${languageCode}] SUCCESS: Found URL for ${languageCode}`)
-            consecutiveFailures = 0 // Reset failure counter on success
-          } else {
-            // Fallback: take the first audio format if exact match not found
-            const fallbackFormat = mwebAudioFormats[0]
-            if (fallbackFormat && (fallbackFormat.url || fallbackFormat.freeTubeUrl)) {
-              mwebUrlsByLanguage.set(languageCode, {
-                url: fallbackFormat.url || fallbackFormat.freeTubeUrl,
-                itag: fallbackFormat.itag,
-                bitrate: fallbackFormat.bitrate,
-                isFallback: true
-              })
-              console.warn(`[Audio-URL-Search-${languageCode}] FALLBACK: Using first available format for ${languageCode}`)
-              consecutiveFailures = 0 // Reset failure counter on success
-            } else {
-              console.warn(`[Audio-URL-Search-${languageCode}] FAILED: No audio URLs found in MWEB response`)
-              consecutiveFailures++
-            }
-          }
-        } else {
-          console.warn(`[Audio-URL-Search-${languageCode}] FAILED: No audio formats in MWEB response`)
-          consecutiveFailures++
-        }
-      } else {
-        console.warn(`[Audio-URL-Search-${languageCode}] FAILED: MWEB playability status: ${mwebInfoForLang.playability_status.status}`)
-        consecutiveFailures++
-      }
-    } catch (error) {
-      console.error(`[Audio-URL-Search-${languageCode}] ERROR: Failed to fetch MWEB URLs for ${languageCode}:`, error)
-      consecutiveFailures++
-
-      // Continue with other languages even if one fails
-      continue
-    }
-  }
-
-  // Restore original hl
-  webInnertube.session.context.client.hl = originalHl
-
-  console.warn('[Audio-URL-Search] Multi-language fetch complete. URLs found for languages:', Array.from(mwebUrlsByLanguage.keys()))
-
-  // FALLBACK MECHANISM: If some languages still lack URLs, try to use English URLs as fallback
-  const languagesWithoutUrls = languageList.filter(lang => !mwebUrlsByLanguage.has(lang))
-  if (languagesWithoutUrls.length > 0 && mwebUrlsByLanguage.has('en')) {
-    const englishUrlInfo = mwebUrlsByLanguage.get('en')
-    console.warn('[Audio-URL-Search] Applying English URL fallback for languages:', languagesWithoutUrls)
-
-    languagesWithoutUrls.forEach(lang => {
-      mwebUrlsByLanguage.set(lang, {
-        ...englishUrlInfo,
-        isFallback: true,
-        fallbackFrom: 'en'
-      })
-      console.warn(`[Audio-URL-Search-${lang}] FALLBACK: Applied English URL for ${lang}`)
-    })
-  }
-
-  // Use the original MWEB request for the main playback (preserves existing behavior)
+  // Use MWEB fallback for playable formats (has URLs, but only one language)
   const mwebInfo = await webInnertube.getBasicInfo(id, { client: 'MWEB', po_token: contentPoToken })
 
   console.warn(`[MultiAudio] MWEB playability status: ${mwebInfo.playability_status.status}`)
 
-  // === [Audio-Sources-Debug] MWEB CLIENT ANALYSIS ===
-  let mwebAudioFormats = []
   if (mwebInfo.playability_status.status === 'OK' && mwebInfo.streaming_data) {
-    console.warn(`[Audio-Sources-Debug] === MWEB CLIENT DATA FOR VIDEO ${id} ===`)
-    const mwebAdaptiveFormats = mwebInfo.streaming_data?.adaptive_formats || []
-    mwebAudioFormats = mwebAdaptiveFormats.filter(f => f.has_audio)
-    console.warn(`[Audio-Sources-Debug] MWEB: Found ${mwebAudioFormats.length} audio formats`)
-
-    mwebAudioFormats.forEach((format, index) => {
-      console.warn(`[Audio-Sources-Debug] MWEB Audio Format #${index + 1}:`, {
-        itag: format.itag,
-        language: format.language,
-        languageCode: format.language,
-        audioQuality: format.audio_quality,
-        hasAudio: format.has_audio,
-        hasVideo: format.has_video,
-        isOriginal: format.is_original,
-        isDubbed: format.is_dubbed,
-        isDescriptive: format.is_descriptive,
-        isSecondary: format.is_secondary,
-        isAutoDubbed: format.is_auto_dubbed,
-        audioTrack: format.audio_track,
-        mimeType: format.mime_type,
-        bitrate: format.bitrate,
-        hasUrl: !!(format.url || format.freeTubeUrl),
-        urlAvailable: format.url ? 'YES' : 'NO',
-        freeTubeUrlAvailable: format.freeTubeUrl ? 'YES' : 'NO'
-      })
-    })
-
     info.playability_status = mwebInfo.playability_status
     info.streaming_data = mwebInfo.streaming_data
     clientName = 'MWEB'
@@ -863,38 +577,6 @@ export async function getLocalVideoInfo(id) {
     }
   }
 
-  const webLanguageList = [...new Set(webAudioFormats.map(format => format.language).filter(Boolean))]
-  const webHasUrls = webAudioFormats.some(format => format.url || format.freeTubeUrl)
-
-  const mwebLanguageList = [...new Set(mwebAudioFormats.map(format => format.language).filter(Boolean))]
-  const mwebHasUrls = mwebAudioFormats.some(format => format.url || format.freeTubeUrl)
-
-  const dashAudioFormats = (info.streaming_data?.adaptive_formats || []).filter(format => format.has_audio)
-  const dashLanguageList = [...new Set(dashAudioFormats.map(format => format.language).filter(Boolean))]
-  const dashHasUrls = dashAudioFormats.some(format => format.url || format.freeTubeUrl)
-
-  console.warn(`[Audio-Sources-Debug] Source comparison for video ${id}:`, {
-    web: {
-      languageCount: webLanguageList.length,
-      languages: webLanguageList,
-      urlsAvailable: webHasUrls ? 'YES' : 'NO',
-      note: 'WEB exposes all metadata but URLs are usually missing'
-    },
-    mweb: {
-      languageCount: mwebLanguageList.length,
-      languages: mwebLanguageList,
-      urlsAvailable: mwebHasUrls ? 'YES' : 'NO',
-      note: 'MWEB returns playable URLs but typically only one server-selected language'
-    },
-    dash: {
-      languageCount: dashLanguageList.length,
-      languages: dashLanguageList,
-      urlsAvailable: dashHasUrls ? 'YES' : 'NO',
-      manifestUrlPresent: !!info.streaming_data?.dash_manifest_url,
-      note: 'DASH manifest inherits whatever streaming_data currently holds'
-    }
-  })
-
   if (info.captions?.caption_tracks) {
     for (const captionTrack of info.captions.caption_tracks) {
       const url = new URL(captionTrack.base_url)
@@ -910,16 +592,6 @@ export async function getLocalVideoInfo(id) {
       captionTrack.base_url = url.toString()
     }
   }
-
-  // Collect audio metadata from all sources for Vuex store
-  console.warn('[Audio-Metadata-Fetch] Collecting audio metadata from MWEB, WEB, and DASH sources')
-  info.audioMetadata = collectAudioMetadata(webAudioFormats, mwebAudioFormats, dashAudioFormats, mwebUrlsByLanguage)
-  console.warn('[Audio-Metadata-Fetch] Audio metadata collection complete:', {
-    mwebCount: info.audioMetadata.mweb.length,
-    webCount: info.audioMetadata.web.length,
-    dashCount: info.audioMetadata.dash.length,
-    urlsInjected: mwebUrlsByLanguage.size
-  })
 
   return info
 }

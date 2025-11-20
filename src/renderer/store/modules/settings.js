@@ -317,7 +317,6 @@ const state = {
   quickBookmarkTargetPlaylistId: 'favorites',
   generalAutoLoadMorePaginatedItemsEnabled: false,
   hideToTrayOnMinimize: false,
-  selectedAudioLanguageCode: null,
 
   // Custom Progress Bar Settings
   customProgressBarEnabled: false,
@@ -750,12 +749,6 @@ for (const settingId of Object.keys(state)) {
         if (settingId === 'captionBackgroundColor' || settingId === 'captionBackgroundColorFullscreen') {
           // eslint-disable-next-line no-console
           console.log(`🎨 [Vuex ACTION] ${updaterId}:`, value)
-        }
-
-        // Add logging for audio language preference
-        if (settingId === 'selectedAudioLanguageCode') {
-          // eslint-disable-next-line no-console
-          console.log('[Audio-Preference-Saved]', value)
         }
 
         await DBSettingHandlers.upsert(settingId, value)

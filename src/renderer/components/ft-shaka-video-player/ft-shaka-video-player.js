@@ -9,7 +9,6 @@ import FtCustomSubtitleDisplay from '../FtCustomSubtitleDisplay/FtCustomSubtitle
 import CustomSubtitleSettings from '../CustomSubtitleSettings/CustomSubtitleSettings.vue'
 import { DefaultFolderKind, KeyboardShortcuts } from '../../../constants'
 import { AudioTrackSelection } from './player-components/AudioTrackSelection'
-import { AudioTrackButton } from './player-components/AudioTrackButton'
 import { FullWindowButton } from './player-components/FullWindowButton'
 import { LegacyQualitySelection } from './player-components/LegacyQualitySelection'
 import { ScreenshotButton } from './player-components/ScreenshotButton'
@@ -190,8 +189,6 @@ export default defineComponent({
 
     /** @type {shaka.ui.Overlay|null} */
     let ui = null
-
-    let isAudioSwitchInProgress = false
 
     const events = new EventTarget()
 
@@ -1742,7 +1739,6 @@ export default defineComponent({
           'ft_playback_speed_buttons',
           'ft_chapter_navigation_buttons',
           'spacer',
-          'ft_audio_track_button',
           'ft_screenshot',
           'ft_subtitle_toggle',
           'ft_custom_subtitle',
@@ -2896,317 +2892,15 @@ export default defineComponent({
     const { ContextMenu: shakaContextMenu, Controls: shakaControls, OverflowMenu: shakaOverflowMenu } = shaka.ui
 
     function registerAudioTrackSelection() {
-      console.warn('[Audio-Init] Registering AudioTrackSelection component for overflow menu')
-
       /** @implements {shaka.extern.IUIElement.Factory} */
       class AudioTrackSelectionFactory {
         create(rootElement, controls) {
-          console.warn('[Audio-Init] Creating AudioTrackSelection instance', {
-            videoId: props.videoId,
-            availableLanguagesCount: props.availableAudioLanguages?.length || 0
-          })
           return new AudioTrackSelection(events, rootElement, controls, props.videoId, props.availableAudioLanguages)
         }
       }
 
       shakaControls.registerElement('ft_audio_tracks', new AudioTrackSelectionFactory())
       shakaOverflowMenu.registerElement('ft_audio_tracks', new AudioTrackSelectionFactory())
-      console.warn('[Audio-Init] AudioTrackSelection registered successfully')
-    }
-
-    function registerAudioTrackSwitchHandler() {
-      console.warn('[Audio-Init] Registering audio track switch handler')
-
-      events.addEventListener('audioTrackSwitchRequested', async (/** @type {CustomEvent} */ event) => {
-        console.warn('[Audio-Switch-Event] Audio track switch event received')
-
-        const audioTrackId = event.detail?.audioTrackId
-
-        if (!audioTrackId) {
-          console.error('[Audio-Error-InvalidPayload] Missing audioTrackId in switch request')
-          return
-        }
-
-        console.warn('[Audio-Switch-Request] Dispatching audio track switch handler:', { audioTrackId })
-        await handleAudioTrackSwitch(audioTrackId)
-      })
-
-      console.warn('[Audio-Init] Audio track switch handler registered successfully')
-    }
-
-    async function handleAudioTrackSwitch(audioTrackId) {
-      console.warn('[Audio-Switch-Handler] Entering handleAudioTrackSwitch', { audioTrackId })
-
-      if (!player) {
-        console.error('[Audio-Error-PlayerMissing] Cannot switch audio track because Shaka player is unavailable')
-        return
-      }
-
-      if (isAudioSwitchInProgress) {
-        console.warn('[Audio-Switch-InProgress] Audio track switch already running, ignoring new request')
-        return
-      }
-
-      console.warn('[Audio-Switch-Start] Handling audio switch request', { audioTrackId })
-
-      isAudioSwitchInProgress = true
-
-      try {
-        console.warn('[Audio-Switch-DispatchStore] Dispatching switchAudioTrack to Vuex store')
-        const result = await store.dispatch('switchAudioTrack', audioTrackId)
-
-        if (!result || !result.success) {
-          console.error('[Audio-Error-StoreRejected] Store rejected audio switch request', result)
-          return
-        }
-
-        console.warn('[Audio-Switch-StoreSuccess] Store approved audio track switch', result)
-
-        const trackMetadata = result.track
-        const videoElement = video.value
-
-        if (!videoElement) {
-          console.error('[Audio-Error-NoVideo] Unable to access video element, aborting audio switch')
-          return
-        }
-
-        const playbackSnapshot = {
-          time: videoElement.currentTime,
-          paused: videoElement.paused,
-          volume: videoElement.volume,
-          muted: videoElement.muted
-        }
-
-        console.warn('[Audio-Switch-State] Captured playback snapshot', playbackSnapshot)
-
-        console.warn('[Audio-Switch-FindTrack] Finding matching Shaka audio track for metadata:', {
-          language: trackMetadata.languageCode,
-          source: trackMetadata.source
-        })
-
-        const matchingTrack = findMatchingShakaAudioTrack(trackMetadata)
-
-        if (!matchingTrack) {
-          console.error('[Audio-Error-Unavailable] Requested track not present in current manifest', trackMetadata)
-          showToast('This audio track is not available in the current stream')
-          return
-        }
-
-        console.warn('[Audio-Switch-TrackFound] Matching Shaka track found:', {
-          language: matchingTrack.language,
-          label: matchingTrack.label,
-          id: matchingTrack.id
-        })
-
-        console.warn('[Audio-Switch-SelectTrack] Calling player.selectAudioTrack')
-        player.selectAudioTrack(matchingTrack)
-        console.warn('[Audio-Switch-SelectSuccess] Audio track selected in player')
-
-        console.warn('[Audio-Switch-RestoreState] Restoring playback state')
-        if (Math.abs(videoElement.currentTime - playbackSnapshot.time) > 0.01) {
-          videoElement.currentTime = playbackSnapshot.time
-          console.warn('[Audio-Switch-TimeRestored] Playback time restored to', playbackSnapshot.time)
-        }
-
-        videoElement.volume = playbackSnapshot.volume
-        videoElement.muted = playbackSnapshot.muted
-
-        if (!playbackSnapshot.paused && videoElement.paused) {
-          console.warn('[Audio-Switch-Resume] Resuming playback')
-          try {
-            await videoElement.play()
-            console.warn('[Audio-Switch-ResumeSuccess] Playback resumed successfully')
-          } catch (error) {
-            console.error('[Audio-Error-ResumeFailed] Failed to resume playback', error)
-          }
-        }
-
-        console.warn('[Audio-Switch-Complete] Successfully completed switch to track:', {
-          language: trackMetadata.languageCode,
-          source: trackMetadata.source,
-          bitrate: trackMetadata.bitrate
-        })
-
-        // Save the preference
-        const languageCode = trackMetadata.languageCode ? trackMetadata.languageCode.split('-')[0] : null
-        if (languageCode && languageCode !== 'und') {
-          console.warn('[Audio-Preference-Save] Saving audio language preference:', languageCode)
-          await store.dispatch('updateSelectedAudioLanguageCode', languageCode)
-          console.warn('[Audio-Preference-Saved] Audio language preference saved successfully')
-        }
-      } catch (error) {
-        console.error('[Audio-Error-Exception] Exception during audio track switch:', error)
-        console.error('[Audio-Error-Stack]', error.stack)
-      } finally {
-        isAudioSwitchInProgress = false
-        console.warn('[Audio-Switch-End] Audio switch handler completed')
-      }
-    }
-
-    function findMatchingShakaAudioTrack(trackMetadata) {
-      console.warn('[Audio-Switch-FindTrack] Searching for matching Shaka audio track')
-
-      if (!player || !trackMetadata) {
-        console.error('[Audio-Error-FindTrack] Player or trackMetadata is missing')
-        return null
-      }
-
-      const allTracks = player.getAudioTracks()
-      const availableTracks = Array.from(deduplicateAudioTracks(allTracks).values())
-      console.warn('[Audio-Switch-FindTrack] Available deduplicated tracks:', {
-        count: availableTracks.length,
-        tracks: availableTracks.map(t => ({ language: t.language, label: t.label, id: t.id }))
-      })
-
-      const normalizedLanguage = (trackMetadata.languageCode || '').toLowerCase()
-      console.warn('[Audio-Switch-FindTrack] Normalized language to match:', normalizedLanguage)
-
-      let matchingTrack = availableTracks.find(track => (track.language || '').toLowerCase() === normalizedLanguage)
-
-      if (matchingTrack) {
-        console.warn('[Audio-Switch-FindTrack] Found match by language:', {
-          language: matchingTrack.language,
-          label: matchingTrack.label
-        })
-      } else if (trackMetadata.formatId) {
-        console.warn('[Audio-Switch-FindTrack] No language match, trying formatId:', trackMetadata.formatId)
-        matchingTrack = availableTracks.find(track => (track.originalAudioId || '').startsWith(String(trackMetadata.formatId)))
-
-        if (matchingTrack) {
-          console.warn('[Audio-Switch-FindTrack] Found match by formatId:', {
-            language: matchingTrack.language,
-            originalAudioId: matchingTrack.originalAudioId
-          })
-        }
-      }
-
-      if (!matchingTrack) {
-        console.error('[Audio-Error-NoMatch] No matching track found for metadata:', trackMetadata)
-      }
-
-      return matchingTrack || null
-    }
-
-    function registerAudioTrackButton() {
-      console.warn('[Audio-Init] Registering AudioTrackButton component')
-
-      events.addEventListener('audioTrackChanged', (/** @type {CustomEvent} */ event) => {
-        // Handle audio track changes if needed
-        console.warn('[Audio-Button-Event] Audio track changed event received:', event.detail)
-      })
-
-      /** @implements {shaka.extern.IUIElement.Factory} */
-      class AudioTrackButtonFactory {
-        create(rootElement, controls) {
-          console.warn('[Audio-Init] Creating AudioTrackButton instance')
-
-          // Get audio tracks from Shaka player
-          const shakaAudioTracks = player ? player.getAudioTracks() : []
-          console.warn('[Audio-Fetch] Shaka player audio tracks:', {
-            count: shakaAudioTracks.length,
-            tracks: shakaAudioTracks.map(t => ({ language: t.language, label: t.label, active: t.active }))
-          })
-
-          // Log available audio languages from metadata
-          console.warn('[Audio-Fetch] Available audio languages from metadata:', {
-            count: props.availableAudioLanguages?.length || 0,
-            languages: props.availableAudioLanguages || []
-          })
-
-          // Get selected audio language preference from settings
-          const selectedAudioLanguageCode = store.getters.getSelectedAudioLanguageCode
-          console.warn('[Audio-Preference-Load] Selected audio language code from settings:', selectedAudioLanguageCode)
-
-          // Determine current audio track based on preference or active track
-          let currentAudioTrack = shakaAudioTracks.find(track => track.active) || null
-
-          // If we have a preference and the active track doesn't match, try to find matching track
-          if (selectedAudioLanguageCode && currentAudioTrack) {
-            const currentLangCode = currentAudioTrack.language
-              ? currentAudioTrack.language.split('-')[0].toLowerCase()
-              : null
-            const preferredLangCode = selectedAudioLanguageCode.toLowerCase()
-
-            if (currentLangCode !== preferredLangCode) {
-              const preferredTrack = shakaAudioTracks.find(track => {
-                const trackLangCode = track.language
-                  ? track.language.split('-')[0].toLowerCase()
-                  : null
-                return trackLangCode === preferredLangCode
-              })
-
-              if (preferredTrack) {
-                console.warn('[Audio-Preference-Match] Found preferred track:', {
-                  language: preferredTrack.language,
-                  label: preferredTrack.label
-                })
-                currentAudioTrack = preferredTrack
-
-                // Apply the preference immediately
-                if (player) {
-                  player.selectAudioTrack(preferredTrack)
-                  console.warn('[Audio-Preference-Apply] Applied preferred audio track on initialization')
-                }
-              } else {
-                console.warn('[Audio-Preference-NoMatch] Preferred language not available in current tracks')
-              }
-            } else {
-              console.warn('[Audio-Preference-AlreadyActive] Current track already matches preference')
-            }
-          }
-
-          console.warn('[Audio-Init] Current audio track:', currentAudioTrack
-            ? {
-                language: currentAudioTrack.language,
-                label: currentAudioTrack.label,
-                active: currentAudioTrack.active
-              }
-            : null)
-
-          const onAudioTrackChange = async (track) => {
-            console.warn('[Audio-Button-Click] User clicked audio track:', {
-              language: track.language,
-              label: track.label
-            })
-
-            if (!player) {
-              console.error('[Audio-Error-NoPlayer] Cannot switch audio track: player not available')
-              return
-            }
-
-            try {
-              // Switch the audio track in Shaka player
-              console.warn('[Audio-Switch-Request] Switching audio track via Shaka player')
-              player.selectAudioTrack(track)
-              console.warn('[Audio-Switch-Success] Shaka player audio track switched successfully')
-
-              // Save the selected audio language preference
-              const languageCode = track.language ? track.language.split('-')[0] : null
-              console.warn('[Audio-Preference-Extract] Extracted language code:', languageCode)
-
-              if (languageCode && languageCode !== 'und') {
-                console.warn('[Audio-Preference-Save] Saving audio language preference to settings')
-                await store.dispatch('updateSelectedAudioLanguageCode', languageCode)
-                console.warn('[Audio-Preference-Saved] Audio language preference saved:', languageCode)
-              } else {
-                console.warn('[Audio-Preference-Skip] Skipping preference save (undefined language)')
-              }
-            } catch (error) {
-              console.error('[Audio-Error-Switch] Error switching audio track:', error)
-              console.error('[Audio-Error-Details]', {
-                message: error.message,
-                stack: error.stack,
-                trackLanguage: track.language
-              })
-            }
-          }
-
-          return new AudioTrackButton(shakaAudioTracks, currentAudioTrack, onAudioTrackChange, rootElement, controls, props.availableAudioLanguages || [])
-        }
-      }
-
-      shakaControls.registerElement('ft_audio_track_button', new AudioTrackButtonFactory())
-      console.warn('[Audio-Init] AudioTrackButton registered successfully')
     }
 
     function registerAutoplayToggle() {
@@ -3496,8 +3190,6 @@ export default defineComponent({
       shakaControls.registerElement('ft_audio_tracks', null)
       shakaOverflowMenu.registerElement('ft_audio_tracks', null)
 
-      shakaControls.registerElement('ft_audio_track_button', null)
-
       shakaControls.registerElement('ft_autoplay_toggle', null)
       shakaOverflowMenu.registerElement('ft_autoplay_toggle', null)
 
@@ -3783,21 +3475,6 @@ export default defineComponent({
      */
     function keyboardShortcutHandler(event) {
       if (!player || !hasLoaded.value) {
-        return
-      }
-
-      // Allow Alt+A for audio track switching
-      if (event.altKey && event.key.toLowerCase() === 'a') {
-        event.preventDefault()
-        // Trigger audio track button click or cycle through audio tracks
-        const audioTracks = player.getAudioTracks()
-        if (audioTracks.length > 1) {
-          const currentTrack = audioTracks.find(track => track.active)
-          const currentIndex = audioTracks.indexOf(currentTrack)
-          const nextIndex = (currentIndex + 1) % audioTracks.length
-          player.selectAudioTrack(audioTracks[nextIndex])
-          console.warn('[Audio-Button-Click] Audio track switched via Alt+A shortcut')
-        }
         return
       }
 
@@ -4271,8 +3948,6 @@ export default defineComponent({
 
       registerScreenshotButton()
       registerAudioTrackSelection()
-      registerAudioTrackSwitchHandler()
-      registerAudioTrackButton()
       registerAutoplayToggle()
       registerCaptionsLineToggle()
       registerCaptionSettingsButton()
@@ -4395,22 +4070,13 @@ export default defineComponent({
      * if this was triggered by a format change and the user had the captions enabled.
      */
     async function handleLoaded() {
-      console.warn('[Audio-Init] Video loaded, initializing audio tracks')
-
       hasLoaded.value = true
       emit('loaded')
 
       // ideally we would set this in the `streaming` event handler, but for HLS this is only set to true after the loaded event fires.
       isLive.value = player.isLive()
       // getAudioTracks() returns an empty array when no variant is active, so we can't do this in the `streaming` event
-      const audioTracks = player.getAudioTracks()
-      console.warn('[Audio-Fetch] Raw audio tracks from player:', {
-        count: audioTracks.length,
-        tracks: audioTracks.map(t => ({ language: t.language, label: t.label, active: t.active, id: t.id }))
-      })
-
-      hasMultipleAudioTracks.value = deduplicateAudioTracks(audioTracks).size > 1
-      console.warn('[Audio-Init] Multiple audio tracks available:', hasMultipleAudioTracks.value)
+      hasMultipleAudioTracks.value = deduplicateAudioTracks(player.getAudioTracks()).size > 1
 
       const promises = []
 
@@ -4514,88 +4180,9 @@ export default defineComponent({
         checkAndAutoDisableSubtitles()
       })
 
-      // Apply saved audio language preference
-      nextTick(() => {
-        applyAudioLanguagePreference()
-      })
-
       if (startInFullscreen && process.env.IS_ELECTRON) {
         startInFullscreen = false
         window.ftElectron.requestFullscreen()
-      }
-    }
-
-    /**
-     * Apply saved audio language preference when video loads
-     */
-    function applyAudioLanguagePreference() {
-      console.warn('[Audio-Preference-Apply] Starting audio language preference application')
-
-      if (!player || !hasLoaded.value) {
-        console.warn('[Audio-Preference-Skip] Player not loaded yet')
-        return
-      }
-
-      // Don't apply for legacy formats (audio-only or combined streams)
-      if (props.format === 'legacy') {
-        console.warn('[Audio-Preference-Skip] Legacy format detected, skipping preference')
-        return
-      }
-
-      try {
-        const savedLanguageCode = store.getters.getSelectedAudioLanguageCode
-        console.warn('[Audio-Preference-Load] Retrieved saved language code from settings:', savedLanguageCode)
-
-        if (!savedLanguageCode) {
-          console.warn('[Audio-Preference-None] No saved preference found, using default audio track')
-          return
-        }
-
-        const audioTracks = player.getAudioTracks()
-        console.warn('[Audio-Preference-Tracks] Available audio tracks:', {
-          count: audioTracks.length,
-          tracks: audioTracks.map(t => ({ language: t.language, label: t.label, active: t.active }))
-        })
-
-        const currentAudioTrack = audioTracks.find(track => track.active)
-        console.warn('[Audio-Preference-Current] Current active track:', currentAudioTrack
-          ? {
-              language: currentAudioTrack.language,
-              label: currentAudioTrack.label
-            }
-          : null)
-
-        if (!audioTracks || audioTracks.length <= 1) {
-          console.warn('[Audio-Preference-Skip] Single or no audio tracks, skipping preference')
-          return
-        }
-
-        // Check if saved language is available
-        const preferredTrack = audioTracks.find(track => {
-          const trackLangCode = track.language ? track.language.split('-')[0].toLowerCase() : ''
-          return trackLangCode === savedLanguageCode.toLowerCase()
-        })
-
-        if (preferredTrack) {
-          console.warn('[Audio-Preference-Match] Found matching track for saved preference:', {
-            language: preferredTrack.language,
-            label: preferredTrack.label
-          })
-
-          // Only switch if it's not already active
-          if (!currentAudioTrack || currentAudioTrack.language !== preferredTrack.language) {
-            console.warn('[Audio-Preference-Switch] Switching to preferred track')
-            player.selectAudioTrack(preferredTrack)
-            console.warn('[Audio-Preference-Applied] Successfully applied saved preference:', savedLanguageCode)
-          } else {
-            console.warn('[Audio-Preference-AlreadyActive] Preferred track is already active, no switch needed')
-          }
-        } else {
-          console.warn('[Audio-Preference-NotAvailable] Saved preference not available in current video, using default')
-        }
-      } catch (error) {
-        console.error('[Audio-Error-Preference] Error applying audio language preference:', error)
-        console.error('[Audio-Error-Stack]', error.stack)
       }
     }
 

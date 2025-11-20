@@ -563,11 +563,10 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  padding-block: 4px;
-  padding-inline: 6px;
+  padding: 4px 6px;
   background: rgb(255 255 255 / 15%);
   border-radius: 3px;
-  min-inline-size: 24px;
+  min-width: 24px;
   text-align: center;
   line-height: 1;
   transition: background-color 0.2s ease;
@@ -578,137 +577,8 @@
 }
 
 /* Ensure the button has proper spacing */
-
-/* Audio Track Button */
-:deep(.audio-track-button-container) {
-  display: flex;
-  position: relative;
-  margin-block: 0;
-  margin-inline: 2px;
-}
-
 :deep(.audio-track-button) {
-  min-inline-size: 40px;
-  block-size: 32px;
-  padding-block: 4px;
-  padding-inline: 8px;
-  background-color: transparent;
-  color: #fff;
-  border: 1px solid rgb(255 255 255 / 30%);
-  border-radius: 4px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  user-select: none;
-  position: relative;
-  pointer-events: auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-}
-
-:deep(.audio-track-button:hover) {
-  background-color: rgb(255 255 255 / 20%);
-  border-color: rgb(255 255 255 / 50%);
-}
-
-:deep(.audio-track-button:focus) {
-  outline: 2px solid var(--primary-color);
-  outline-offset: 2px;
-}
-
-:deep(.audio-track-icon) {
-  font-size: 14px;
-  line-height: 1;
-}
-
-/* Audio Track Dropdown */
-:deep(.audio-track-dropdown) {
-  position: absolute;
-  inset-block-end: 100%;
-  inset-inline-start: 50%;
-  transform: translateX(-50%);
-  background-color: rgb(0 0 0 / 90%);
-  border: 1px solid rgb(255 255 255 / 30%);
-  border-radius: 4px;
-  padding-block: 4px;
-  padding-inline: 0;
-  margin-block-end: 4px;
-  min-inline-size: 180px;
-  max-block-size: 200px;
-  overflow-y: auto;
-  z-index: 1000;
-  box-shadow: 0 4px 12px rgb(0 0 0 / 50%);
-}
-
-:deep(.audio-track-option) {
-  inline-size: 100%;
-  padding-block: 8px;
-  padding-inline: 12px;
-  background-color: transparent;
-  color: #fff;
-  border: 0;
-  text-align: start;
-  font-size: 14px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  transition: background-color 0.2s ease;
-}
-
-:deep(.audio-track-option:hover) {
-  background-color: rgb(255 255 255 / 10%);
-}
-
-:deep(.audio-track-option.audio-track-active) {
-  background-color: rgb(255 255 255 / 20%);
-  font-weight: 500;
-}
-
-:deep(.audio-track-name) {
-  flex: 1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-:deep(.audio-track-original) {
-  color: rgb(255 255 255 / 70%);
-  font-size: 12px;
-}
-
-:deep(.audio-track-checkmark) {
-  color: var(--primary-color, #0080ff);
-  font-weight: bold;
-  flex-shrink: 0;
-}
-
-/* Audio track disabled/unavailable styling */
-:deep(.audio-track-option.audio-track-disabled) {
-  opacity: 0.5;
-  color: #999;
-  cursor: default !important;
-  pointer-events: none;
-}
-
-:deep(.audio-track-option.audio-track-disabled:hover) {
-  background-color: transparent !important;
-}
-
-:deep(.audio-track-lang-code) {
-  color: rgb(255 255 255 / 70%);
-  font-size: 12px;
-  font-weight: 400;
-}
-
-:deep(.audio-track-unavailable) {
-  color: rgb(255 100 100 / 80%);
-  font-size: 11px;
-  font-weight: 400;
+  margin: 0 2px;
 }
 
 /* Hide the default icon since we're using language code */
